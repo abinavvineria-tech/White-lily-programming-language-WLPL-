@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "wlpm"
+version = "1.0.0"
+description = "White Lily Package Manager - An elegant, flower-themed package manager"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "White Lily", email = "white.lily@example.com" },
+]
+keywords = ["package-manager", "white-lily", "flower", "theme", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Software Distribution",
+]
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/white-lily/wlpm"
+Repository = "https://github.com/white-lily/wlpm"
+Documentation = "https://github.com/white-lily/wlpm#readme"
+
+[project.scripts]
+wlpm = "wlpm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["wlpm*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"

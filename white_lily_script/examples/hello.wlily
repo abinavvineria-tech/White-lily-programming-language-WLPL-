@@ -1,0 +1,10 @@
+# White Lily Script - Hello World
+# A new flower blooms...
+
+bloom message = "Hello, White Lily World!"
+blossom message
+
+bloom a = 10
+bloom b = 20
+blossom "The sum of the crystals is:"
+blossom a + b

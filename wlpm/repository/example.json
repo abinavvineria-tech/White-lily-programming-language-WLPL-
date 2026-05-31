@@ -1,0 +1,95 @@
+{
+  "name": "white-lily-official-repository",
+  "version": "1.0.0",
+  "description": "The official White Lily Package Repository - A garden of beautiful packages.",
+  "maintainer": "White Lily <white.lily@example.com>",
+  "homepage": "https://github.com/white-lily/wlpm-repository",
+  "updated": "2026-05-31T00:00:00Z",
+  "packages": {
+    "lily-utils": {
+      "description": "Utility functions for everyday development.",
+      "author": "White Lily",
+      "license": "MIT",
+      "versions": {
+        "1.0.0": {
+          "description": "Core utility functions.",
+          "author": "White Lily",
+          "license": "MIT",
+          "dependencies": {},
+          "download_url": "https://github.com/white-lily/lily-utils/releases/download/v1.0.0/lily-utils-1.0.0.wlpkg",
+          "checksum": "sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+          "size": 24576,
+          "keywords": ["utilities", "helpers", "core"]
+        },
+        "1.1.0": {
+          "description": "Added string manipulation and date formatting.",
+          "author": "White Lily",
+          "license": "MIT",
+          "dependencies": {},
+          "download_url": "https://github.com/white-lily/lily-utils/releases/download/v1.1.0/lily-utils-1.1.0.wlpkg",
+          "checksum": "sha256:b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+          "size": 28672,
+          "keywords": ["utilities", "helpers", "string", "date"]
+        }
+      }
+    },
+    "crystal-http": {
+      "description": "Lightweight HTTP client with crystal-clear API.",
+      "author": "White Lily",
+      "license": "MIT",
+      "versions": {
+        "0.1.0": {
+          "description": "Initial release with GET and POST support.",
+          "author": "White Lily",
+          "license": "MIT",
+          "dependencies": {
+            "lily-utils": ">=1.0.0"
+          },
+          "download_url": "https://github.com/white-lily/crystal-http/releases/download/v0.1.0/crystal-http-0.1.0.wlpkg",
+          "checksum": "sha256:c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+          "size": 18432,
+          "keywords": ["http", "networking", "client"]
+        }
+      }
+    },
+    "petal-templates": {
+      "description": "Template engine with flower-like syntax.",
+      "author": "White Lily",
+      "license": "MIT",
+      "versions": {
+        "2.0.0": {
+          "description": "Stable release with inheritance and partials.",
+          "author": "White Lily",
+          "license": "MIT",
+          "dependencies": {
+            "lily-utils": ">=1.0.0"
+          },
+          "download_url": "https://github.com/white-lily/petal-templates/releases/download/v2.0.0/petal-templates-2.0.0.wlpkg",
+          "checksum": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+          "size": 32768,
+          "keywords": ["templates", "rendering", "views"]
+        }
+      }
+    },
+    "bloom-test": {
+      "description": "A delightful testing framework.",
+      "author": "White Lily",
+      "license": "MIT",
+      "versions": {
+        "0.5.0": {
+          "description": "Alpha release with basic test runner.",
+          "author": "White Lily",
+          "license": "MIT",
+          "dependencies": {
+            "lily-utils": ">=1.0.0",
+            "petal-templates": "^2.0.0"
+          },
+          "download_url": "https://github.com/white-lily/bloom-test/releases/download/v0.5.0/bloom-test-0.5.0.wlpkg",
+          "checksum": "sha256:e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5",
+          "size": 14336,
+          "keywords": ["testing", "bloom", "quality"]
+        }
+      }
+    }
+  }
+}

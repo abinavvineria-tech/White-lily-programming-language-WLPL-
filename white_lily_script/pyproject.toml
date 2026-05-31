@@ -1,0 +1,9 @@
+[project]
+name = "whitescript"
+version = "1.0.0"
+description = "White Lily Script — a magical, nature-inspired programming language"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"

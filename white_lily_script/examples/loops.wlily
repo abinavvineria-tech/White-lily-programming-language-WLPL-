@@ -1,0 +1,22 @@
+# White Lily Script - Loops and Conditions
+# Vines weave through the garden...
+
+bloom flowers = ["Rose", "Lily", "Tulip", "Daisy", "Orchid"]
+
+blossom "Walking through the garden..."
+vine flower in flowers:
+  if flower == "Lily":
+    blossom "~ The " .. flower .. " shines brightest! ~"
+  elif flower == "Rose":
+    blossom "  The " .. flower .. " blooms in red."
+  else:
+    blossom "  A gentle " .. flower .. " grows."
+
+blossom ""
+bloom count = 0
+vine i in range(5):
+  count = count + 1
+  blossom "Flower " .. count .. " has bloomed."
+
+blossom ""
+blossom "Total flowers: " .. count

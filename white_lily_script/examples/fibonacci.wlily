@@ -1,0 +1,12 @@
+# White Lily Script - Fibonacci Sequence
+# Watch the flowers bloom in golden ratio
+
+flower fibonacci(n):
+  if n <= 1:
+    petal n
+  petal fibonacci(n - 1) + fibonacci(n - 2)
+
+garden:
+  blossom "Fibonacci Sequence:"
+  vine i in range(10):
+    blossom fibonacci(i)

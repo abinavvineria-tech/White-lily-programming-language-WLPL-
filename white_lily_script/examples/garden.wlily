@@ -1,0 +1,27 @@
+# White Lily Script - Garden Example
+# A magical garden simulation
+
+flower describe_flower(name, color):
+  blossom name .. " is a beautiful " .. color .. " flower."
+
+flower count_petals(count):
+  vine i in range(count):
+    blossom "Petal " .. (i + 1) .. ": ❀"
+  petal count
+
+bloom lily = "White Lily"
+bloom colors = ["crystal white", "soft green", "silver"]
+
+garden:
+  blossom "~ Welcome to the White Lily Garden ~"
+  blossom ""
+  describe_flower(lily, "crystal white")
+  describe_flower("Rose", "magical pink")
+  describe_flower("Violet", "mystical purple")
+
+  blossom ""
+  blossom "Counting petals..."
+  bloom total = count_petals(5)
+  blossom "Total petals: " .. total
+  blossom ""
+  blossom "~ The garden is in full bloom! ~"

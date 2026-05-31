@@ -1,0 +1,29 @@
+{
+  "name": "white-lily-script",
+  "displayName": "White Lily Script",
+  "description": "Syntax highlighting for White Lily Script (.wlily)",
+  "version": "1.0.0",
+  "publisher": "white-lily",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "whitelily",
+        "aliases": ["White Lily Script", "whitelily"],
+        "extensions": [".wlily"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "whitelily",
+        "scopeName": "source.wlily",
+        "path": "./syntaxes/whitelily.tmLanguage.json"
+      }
+    ]
+  }
+}
