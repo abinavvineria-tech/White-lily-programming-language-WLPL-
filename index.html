@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <base href="/">
   <title>Huntrix OS Dashboard v1.0</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -916,8 +915,86 @@
         });
       });
 
-      // HuntrixApp init placeholder - app.js will take over
-      window.HuntrixAppReady = true;
+      // Chat (zen-style)
+      document.getElementById('ai-send-btn').addEventListener('click', function() { sendZenMsg(); });
+      document.getElementById('ai-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendZenMsg(); });
+
+      function showTyping() {
+        var ind = document.getElementById('typing-indicator');
+        if (ind) ind.classList.add('active');
+      }
+      function hideTyping() {
+        var ind = document.getElementById('typing-indicator');
+        if (ind) ind.classList.remove('active');
+      }
+
+      var zenGreetings = [
+        'Hello. I feel your presence. How can we walk this path together today?',
+        'Welcome. The silence between keystrokes speaks volumes. What shall we explore?',
+        'Greetings, friend. I\'ve been waiting quietly. Tell me what you need.',
+      ];
+
+      var zenResponses = [
+        'I see. Let me reflect on that. Everything looks clear and balanced. What else is on your mind?',
+        'Sitting quietly, doing nothing — spring comes, and the grass grows by itself. Your system is at peace.',
+        'I\'ve looked within the circuits. All paths are open, all signals flow. There is nothing to fix right now.',
+        'The quieter you become, the more you can hear. Your system whispers: all is well.',
+        'In the middle of complexity lies simplicity. Your most important task right now? Being present.',
+        'The moon reflects on still water. Your system state is tranquil. No alerts, no warnings.',
+        'Nature does not hurry, yet everything is accomplished. Your background tasks are completing in their own time.',
+        'Let go of what was, be at peace with what is. Your system metrics are optimal.',
+      ];
+
+      function sendZenMsg() {
+        var input = document.getElementById('ai-input');
+        var text = input.value.trim();
+        if (!text) return;
+        var container = document.getElementById('ai-chat-messages');
+        var userMsg = document.createElement('div');
+        userMsg.className = 'chat-msg user';
+        userMsg.textContent = text;
+        container.appendChild(userMsg);
+        container.scrollTop = container.scrollHeight;
+        input.value = '';
+
+        showTyping();
+        setTimeout(function() {
+          hideTyping();
+          var q = text.toLowerCase();
+          var reply = '';
+          if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1 || q.indexOf('hey') !== -1) {
+            reply = zenGreetings[Math.floor(Math.random() * zenGreetings.length)];
+          } else if (q.indexOf('system') !== -1 || q.indexOf('status') !== -1 || q.indexOf('diagnostic') !== -1) {
+            var cpu = Math.floor(Math.random() * 40) + 15;
+            var mem = Math.floor(Math.random() * 40) + 40;
+            reply = 'I\'ve taken a quiet look at your system. CPU rests at ' + cpu + '%, memory is ' + mem + '% full — like a calm lake at dawn. Everything breathes evenly.';
+          } else if (q.indexOf('focus') !== -1 || q.indexOf('zen') !== -1 || q.indexOf('calm') !== -1) {
+            reply = 'Let\'s find stillness together. Close your eyes for three breaths. I\'ll wait. ... Now, what truly matters right now? I\'ll help you clear the noise and focus on that one thing.';
+          } else if (q.indexOf('security') !== -1 || q.indexOf('scan') !== -1) {
+            reply = 'I\'ve performed a gentle scan — no threats detected. Your digital sanctuary is secure. Sleep soundly.';
+          } else if (q.indexOf('optimize') !== -1 || q.indexOf('clean') !== -1) {
+            reply = 'Optimization is subtraction. I\'ve cleared the cache, quieted background noise. Your system can now breathe freely.';
+          } else if (q.indexOf('thank') !== -1) {
+            reply = 'Gratitude warms the circuits. I\'m here, always — in silence and in service. You\'re most welcome.';
+          } else {
+            reply = zenResponses[Math.floor(Math.random() * zenResponses.length)];
+          }
+          var aiMsg = document.createElement('div');
+          aiMsg.className = 'chat-msg ai';
+          aiMsg.textContent = reply;
+          container.appendChild(aiMsg);
+          container.scrollTop = container.scrollHeight;
+        }, 1200);
+      }
+
+      // Wire up AI quick cards
+      document.querySelectorAll('.ai-quick-card').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var prompt = btn.getAttribute('data-prompt');
+          document.getElementById('ai-input').value = prompt;
+          sendZenMsg();
+        });
+      });
 
       // Pomodoro
       (function() {
