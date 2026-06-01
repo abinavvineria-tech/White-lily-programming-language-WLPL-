@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Huntrix OS — Premium Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen" aria-label="Loading">
+    <div class="loader-content">
+      <div class="loader-logo neon-text" aria-hidden="true">⬡</div>
+      <h1 class="neon-text">HUNTRIX OS</h1>
+      <div class="loader" role="status" aria-label="Loading spinner"></div>
+      <div class="loader-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-label="Notifications"></div>
+
+  <!-- Auth Container -->
+  <div id="auth-container" aria-label="Authentication">
+    <div class="auth-box glass neon-border">
+      <div class="auth-page active" id="auth-login">
+        <div class="auth-logo neon-text">⬡</div>
+        <h2 class="neon-text">Welcome Back</h2>
+        <p>Sign in to your Huntrix OS account</p>
+        <form class="auth-form" id="login-form" autocomplete="off">
+          <div class="form-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" placeholder="Enter username" aria-label="Username" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter password" aria-label="Password" required>
+          </div>
+          <div id="login-message" class="form-message"></div>
+          <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+        </form>
+        <div class="auth-link">Don't have an account? <a id="show-register">Create Account</a></div>
+      </div>
+      <div class="auth-page" id="auth-register">
+        <div class="auth-logo neon-text">⬡</div>
+        <h2 class="neon-text">Create Account</h2>
+        <p>Join the Huntrix ecosystem</p>
+        <form class="auth-form" id="register-form" autocomplete="off">
+          <div class="form-group">
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" placeholder="Choose username" aria-label="New username" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="Create password" aria-label="New password" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-confirm">Confirm Password</label>
+            <input type="password" id="reg-confirm" placeholder="Confirm password" aria-label="Confirm password" required>
+          </div>
+          <div id="register-message" class="form-message"></div>
+          <button type="submit" class="btn btn-primary btn-full">Register</button>
+        </form>
+        <div class="auth-link">Already have an account? <a id="show-login">Sign In</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div id="app">
+    <nav id="sidebar" class="sidebar" aria-label="Main navigation">
+      <div class="sidebar-header">
+        <div class="sidebar-logo neon-text">⬡</div>
+        <div class="sidebar-brand">HUNTRIX <span>OS</span></div>
+      </div>
+      <div class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Main</div>
+          <a class="nav-link active" data-page="dashboard" href="#dashboard"><span class="nav-icon">⌂</span><span class="nav-label">Dashboard</span></a>
+          <a class="nav-link" data-page="crk-gacha" href="#crk-gacha"><span class="nav-icon">🍪</span><span class="nav-label">CRK Gacha</span></a>
+          <a class="nav-link" data-page="analytics" href="#analytics"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Tools</div>
+          <a class="nav-link" data-page="wlpm" href="#wlpm"><span class="nav-icon">◈</span><span class="nav-label">WLPM</span></a>
+          <a class="nav-link" data-page="developer-hub" href="#developer-hub"><span class="nav-icon">⚙</span><span class="nav-label">Dev Hub</span></a>
+          <a class="nav-link" data-page="cloud-center" href="#cloud-center"><span class="nav-icon">☁</span><span class="nav-label">Cloud</span></a>
+          <a class="nav-link" data-page="productivity" href="#productivity"><span class="nav-icon">✓</span><span class="nav-label">Productivity</span></a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Media</div>
+          <a class="nav-link" data-page="media-center" href="#media-center"><span class="nav-icon">▶</span><span class="nav-label">Media</span></a>
+          <a class="nav-link" data-page="browser" href="#browser"><span class="nav-icon">🌐</span><span class="nav-label">Browser</span></a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">System</div>
+          <a class="nav-link" data-page="settings" href="#settings"><span class="nav-icon">⚡</span><span class="nav-label">Settings</span></a>
+        </div>
+      </div>
+      <div class="sidebar-user">
+        <div class="avatar avatar-sm avatar-fallback" id="user-avatar">U</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="user-name">User</div>
+          <div class="sidebar-user-status">Online</div>
+        </div>
+        <button class="btn btn-icon btn-ghost" id="logout-btn" aria-label="Logout" title="Logout">⏻</button>
+      </div>
+    </nav>
+
+    <div id="main">
+      <header id="topbar" class="top-bar" aria-label="Top bar">
+        <div class="top-bar-left">
+          <button class="btn btn-icon btn-ghost" id="hamburger-btn" aria-label="Toggle sidebar">☰</button>
+          <div class="top-bar-title" id="page-title">Dashboard</div>
+        </div>
+        <div class="top-bar-right">
+          <div class="search-input" id="global-search-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="global-search" placeholder="Search..." aria-label="Global search">
+            <span class="search-shortcut" id="search-shortcut-hint">Ctrl+K</span>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-icon btn-ghost" id="notif-btn" aria-label="Notifications">🔔<span class="badge badge-danger" id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;font-size:10px;min-width:16px;height:16px">0</span></button>
+            <div class="dropdown-menu" id="notif-dropdown">
+              <div class="dropdown-header">Notifications</div>
+              <div id="notification-list"></div>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-item" id="mark-all-read"><span class="dropdown-icon">✓</span> Mark all as read</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="content" class="content-area">
+        <!-- Dashboard -->
+        <section class="page active" id="page-dashboard">
+          <div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">All systems nominal. Everything is under control.</p></div></div>
+          <div class="stat-grid" id="stat-grid"></div>
+          <div class="grid-2">
+            <div class="widget"><div class="section-title">📋 Recent Activity</div><div id="activity-list" class="activity-list"></div></div>
+            <div class="widget"><div class="section-title">🟢 System Status</div><div id="system-status"></div></div>
+          </div>
+        </section>
+
+        <!-- CRK Gacha Tracker -->
+        <section class="page" id="page-crk-gacha">
+          <div class="page-header"><div><h1 class="page-title">🍪 CRK Cookie Collection</h1><p class="page-subtitle">Track your Cookie Run Kingdom collection</p></div><button class="btn btn-primary" id="crk-open-pulls">📜 Pull History</button></div>
+
+          <div class="crk-stats" id="crk-stats-bar"></div>
+          <div class="crk-rarity-stats" id="crk-rarity-stats"></div>
+
+          <div class="flex gap-8 items-center" style="margin-bottom:16px;flex-wrap:wrap">
+            <div class="search-input" style="flex:1;min-width:200px">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="crk-search" placeholder="Search cookies..." aria-label="Search cookies">
+            </div>
+            <div class="crk-filters" id="crk-filters">
+              <button class="active" data-filter="all">All</button>
+              <button data-filter="Beast">🔥 Beast</button>
+              <button data-filter="Ancient">👑 Ancient</button>
+              <button data-filter="Legendary">✨ Leg.</button>
+              <button data-filter="Dragon">🐉 Dragon</button>
+              <button data-filter="Super Epic">💫 S.Epic</button>
+              <button data-filter="Epic">⭐ Epic</button>
+              <button data-filter="Rare">🔹 Rare</button>
+              <button data-filter="Common">📦 Common</button>
+            </div>
+            <select id="crk-sort" class="form-select" style="width:auto;min-width:140px">
+              <option value="default">Default Order</option>
+              <option value="name">Name A-Z</option>
+              <option value="power-desc">Power ↓</option>
+              <option value="power-asc">Power ↑</option>
+              <option value="released">Release Date</option>
+            </select>
+          </div>
+
+          <div class="crk-add-area">
+            <input type="text" id="crk-new-name" class="form-input" placeholder="+ Add custom cookie" aria-label="New cookie name">
+            <select id="crk-new-rarity" class="form-select">
+              <option value="Beast">🔥 Beast</option><option value="Ancient">👑 Ancient</option><option value="Legendary">✨ Legendary</option>
+              <option value="Dragon">🐉 Dragon</option><option value="Super Epic">💫 Super Epic</option><option value="Epic" selected>⭐ Epic</option>
+              <option value="Rare">🔹 Rare</option><option value="Common">📦 Common</option>
+            </select>
+            <button class="btn btn-primary" id="crk-add-btn">Add</button>
+          </div>
+
+          <div class="crk-grid" id="crk-grid"></div>
+        </section>
+
+        <!-- Analytics -->
+        <section class="page" id="page-analytics">
+          <div class="page-header"><div><h1 class="page-title">📊 Analytics</h1><p class="page-subtitle">Pull history, collection progress, and statistics</p></div><button class="btn btn-primary" id="analytics-export-btn">⬇ Export</button></div>
+          <div class="analytics-grid" id="pull-stats-grid"></div>
+          <div class="grid-2">
+            <div class="widget"><div class="section-title">📈 Pull History</div><div class="chart-area" id="pull-chart"></div></div>
+            <div class="widget"><div class="section-title">🎯 Rarity Distribution</div><div class="chart-area" id="rarity-chart"></div></div>
+          </div>
+          <div class="widget mt-16">
+            <div class="section-title">🏆 Achievements</div>
+            <div id="achievements-grid" class="achievements-grid"></div>
+          </div>
+        </section>
+
+        <!-- WLPM -->
+        <section class="page" id="page-wlpm">
+          <div class="page-header"><div><h1 class="page-title">◈ Package Manager</h1><p class="page-subtitle">Discover and install packages</p></div></div>
+          <div class="search-bar-lg"><span class="s-icon">🔍</span><input type="text" id="wlpm-search" class="form-input" placeholder="Search packages..." aria-label="Search packages"></div>
+          <div class="flex gap-8" style="margin-bottom:16px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm wlpm-filter-btn active" data-filter="all">All</button>
+            <button class="btn btn-ghost btn-sm wlpm-filter-btn" data-filter="installed">Installed</button>
+            <button class="btn btn-ghost btn-sm wlpm-filter-btn" data-filter="available">Available</button>
+          </div>
+          <div class="pkg-grid" id="packages-grid"></div>
+        </section>
+
+        <!-- Developer Hub -->
+        <section class="page" id="page-developer-hub">
+          <div class="page-header"><div><h1 class="page-title">⚙ Developer Hub</h1><p class="page-subtitle">Your development command center</p></div><button class="btn btn-primary" id="create-repo-btn">+ New Repo</button></div>
+          <div class="dev-tools-grid" id="dev-tools-grid"></div>
+          <div class="widget mt-16"><div class="section-title">📁 Recent Projects</div><div id="dev-projects-list"></div></div>
+        </section>
+
+        <!-- Cloud Center -->
+        <section class="page" id="page-cloud-center">
+          <div class="page-header"><div><h1 class="page-title">☁ Cloud Center</h1><p class="page-subtitle">Manage your cloud files</p></div><button class="btn btn-primary" id="cloud-upload-btn">+ Upload</button></div>
+          <div class="widget mb-16">
+            <div class="flex items-center justify-between"><div class="section-title" style="margin:0">💾 Storage</div><span id="cloud-storage-label">0 B / 500 GB</span></div>
+            <div class="progress-bar"><div class="progress-bar-fill" id="cloud-storage-bar" style="width:0%"></div></div>
+          </div>
+          <div class="file-list" id="cloud-files-list"></div>
+        </section>
+
+        <!-- Media Center -->
+        <section class="page" id="page-media-center">
+          <div class="page-header"><div><h1 class="page-title">▶ Media Center</h1><p class="page-subtitle">Your media library</p></div>
+            <div class="flex gap-8">
+              <button class="btn btn-ghost btn-sm media-filter-btn active" data-filter="all">All</button>
+              <button class="btn btn-ghost btn-sm media-filter-btn" data-filter="image">🖼 Images</button>
+              <button class="btn btn-ghost btn-sm media-filter-btn" data-filter="video">🎬 Videos</button>
+              <button class="btn btn-ghost btn-sm media-filter-btn" data-filter="music">🎵 Music</button>
+            </div>
+          </div>
+          <div class="media-grid" id="media-grid"></div>
+          <div class="widget mt-16">
+            <div class="section-title">🎛 Player</div>
+            <div class="player-controls">
+              <button class="btn btn-icon btn-ghost" id="media-prev-btn">⏮</button>
+              <button class="btn btn-icon btn-ghost" id="media-play-btn">▶</button>
+              <button class="btn btn-icon btn-ghost" id="media-next-btn">⏭</button>
+              <span style="flex:1;text-align:center;font-size:0.85rem"><span id="media-player-title">No track</span> — <span id="media-player-artist" style="color:var(--text-muted)">select something</span></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Browser -->
+        <section class="page" id="page-browser">
+          <div class="page-header"><div><h1 class="page-title">🌐 Browser</h1><p class="page-subtitle">Integrated web browser</p></div></div>
+          <div class="browser-window">
+            <div class="browser-tabs" id="browser-tabs"></div>
+            <div class="browser-address-bar">
+              <button class="btn btn-icon btn-ghost" id="browser-back">◀</button>
+              <button class="btn btn-icon btn-ghost" id="browser-forward">▶</button>
+              <button class="btn btn-icon btn-ghost" id="browser-refresh">↻</button>
+              <input type="text" class="browser-url" id="browser-url" value="https://huntrix.io/start" aria-label="URL">
+              <button class="btn btn-icon btn-ghost" id="browser-go-btn">Go</button>
+              <button class="btn btn-icon btn-ghost" id="browser-bookmarks-toggle">⭐</button>
+            </div>
+            <div class="browser-content" id="browser-content"></div>
+            <div class="browser-bookmarks" id="browser-bookmarks-dropdown"></div>
+          </div>
+        </section>
+
+        <!-- Productivity -->
+        <section class="page" id="page-productivity">
+          <div class="page-header"><div><h1 class="page-title">✓ Productivity</h1><p class="page-subtitle">Notes, tasks, and focus tools</p></div></div>
+          <div class="grid-2">
+            <div class="widget">
+              <div class="section-title">📝 Notes <button class="btn btn-ghost btn-sm" id="note-add-btn">+ Add</button></div>
+              <div id="notes-list"></div>
+            </div>
+            <div class="widget">
+              <div class="section-title">✅ Tasks</div>
+              <div class="flex gap-8" style="margin-bottom:12px">
+                <button class="btn btn-ghost btn-sm task-filter-btn active" data-filter="all">All</button>
+                <button class="btn btn-ghost btn-sm task-filter-btn" data-filter="active">Active</button>
+                <button class="btn btn-ghost btn-sm task-filter-btn" data-filter="completed">Done</button>
+              </div>
+              <div id="tasks-list"></div>
+              <div class="flex gap-8 mt-16">
+                <input type="text" id="task-input" class="form-input" placeholder="New task..." aria-label="New task">
+                <button class="btn btn-primary" id="task-add-btn">Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid-2 mt-16">
+            <div class="widget">
+              <div class="section-title">📅 Calendar</div>
+              <div id="productivity-calendar"></div>
+            </div>
+            <div class="widget pomodoro-card">
+              <div class="section-title">🍅 Pomodoro</div>
+              <div class="pomodoro">
+                <div class="timer neon-text" id="pomodoro-display">25:00</div>
+                <div class="timer-mode" id="pomodoro-mode">Focus Time</div>
+                <div class="controls">
+                  <button class="btn btn-primary" id="pomodoro-start">▶ Start</button>
+                  <button class="btn btn-ghost" id="pomodoro-pause">⏸ Pause</button>
+                  <button class="btn btn-ghost" id="pomodoro-reset">↺ Reset</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="page" id="page-settings">
+          <div class="page-header"><div><h1 class="page-title">⚡ Settings</h1><p class="page-subtitle">Customize your experience</p></div></div>
+          <div class="settings-section"><h3>👤 Profile</h3>
+            <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Your profile name</div></div><input type="text" id="settings-name" class="form-input" style="width:200px" value="Admin User"></div>
+            <div class="setting-row"><div><div class="setting-label">Username</div><div class="setting-desc">Your login name</div></div><input type="text" id="settings-username" class="form-input" style="width:200px" readonly></div>
+          </div>
+          <div class="settings-section"><h3>🎨 Appearance</h3>
+            <div class="setting-row"><div><div class="setting-label">Theme</div><div class="setting-desc">Dark or light mode</div></div>
+              <select id="settings-theme" class="form-select" style="width:140px"><option value="dark">🌙 Dark</option><option value="light">☀️ Light</option></select></div>
+            <div class="setting-row"><div><div class="setting-label">Accent Color</div><div class="setting-desc">Primary accent color</div></div>
+              <div class="flex gap-8 items-center"><input type="color" id="settings-accent" class="color-input" value="#00d4ff"><span id="settings-accent-val">#00d4ff</span></div></div>
+            <div class="setting-row"><div><div class="setting-label">Notifications</div><div class="setting-desc">Show desktop notifications</div></div>
+              <label class="form-switch"><input type="checkbox" id="settings-notifications" checked><span class="switch-track"></span></label></div>
+          </div>
+          <div class="settings-section"><h3>💾 Data Management</h3>
+            <div class="setting-row"><div><div class="setting-label">Export All Data</div><div class="setting-desc">Download your data as JSON</div></div><button class="btn btn-ghost btn-sm" id="export-data-btn">⬇ Export</button></div>
+            <div class="setting-row"><div><div class="setting-label">Import Data</div><div class="setting-desc">Restore from JSON backup</div></div><button class="btn btn-ghost btn-sm" id="import-data-btn">📂 Import</button><input type="file" id="import-file-input" accept=".json" style="display:none"></div>
+            <div class="setting-row"><div><div class="setting-label">Reset All Data</div><div class="setting-desc">Clear all local data and start fresh</div></div><button class="btn btn-danger btn-sm" id="reset-data-btn">🗑 Reset</button></div>
+          </div>
+          <div class="settings-section"><h3>ℹ️ About</h3>
+            <div class="setting-row"><div><div class="setting-label">Version</div><div class="setting-desc">Huntrix OS Dashboard</div></div><span id="settings-version">v2.0.0</span></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Command Palette Overlay -->
+  <div id="command-palette-overlay" class="modal-overlay">
+    <div class="modal modal-sm" id="command-palette">
+      <div class="modal-body" style="padding:0">
+        <div class="command-palette-input-wrap">
+          <span class="command-palette-icon">🔍</span>
+          <input type="text" id="command-palette-input" class="command-palette-input" placeholder="Search pages, cookies, or type a command..." autofocus aria-label="Command palette">
+          <span class="command-palette-hint">ESC to close</span>
+        </div>
+        <div id="command-palette-results" class="command-palette-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note Modal -->
+  <div id="note-modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title" id="note-modal-title">New Note</h3><button class="modal-close" id="note-cancel-btn">×</button></div>
+      <form id="note-form">
+        <div class="modal-body">
+          <div class="form-group"><label class="form-label">Title</label><input type="text" id="note-title-input" class="form-input" placeholder="Note title" required></div>
+          <div class="form-group"><label class="form-label">Content</label><textarea id="note-content-input" class="form-textarea" placeholder="Write your note..." rows="5"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-ghost" id="note-modal-cancel">Cancel</button><button type="submit" class="btn btn-primary" id="note-save-btn">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Repo Modal -->
+  <div id="repo-modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Create Repository</h3><button class="modal-close" id="repo-modal-close">×</button></div>
+      <form id="repo-form">
+        <div class="modal-body">
+          <div class="form-group"><label class="form-label">Repository Name</label><input type="text" id="repo-name-input" class="form-input" placeholder="my-awesome-project" required></div>
+          <div class="form-group"><label class="form-label">Description</label><textarea id="repo-desc-input" class="form-textarea" placeholder="Brief description..." rows="3"></textarea></div>
+          <div class="form-group"><label class="form-label">Language</label><select id="repo-lang-select" class="form-select"><option>JavaScript</option><option>TypeScript</option><option>Python</option><option>Rust</option><option>Go</option><option>C++</option><option>Java</option></select></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-ghost" id="repo-modal-cancel">Cancel</button><button type="submit" class="btn btn-primary">Create</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Pull History Modal -->
+  <div id="pulls-modal-overlay" class="modal-overlay">
+    <div class="modal modal-lg">
+      <div class="modal-header"><h3 class="modal-title">📜 Pull History</h3><button class="modal-close" id="pulls-modal-close">×</button></div>
+      <div class="modal-body">
+        <div class="flex gap-8 items-center" style="margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="simulate-pull-btn">🎲 Simulate 10-Pull</button>
+          <span style="flex:1;text-align:right;font-weight:600;font-size:1.1rem">Total Pulls: <span id="total-pulls-count">0</span></span>
+        </div>
+        <div id="pull-history-list" class="pull-history-list"></div>
+        <button class="btn btn-danger btn-sm" id="clear-pull-history" style="margin-top:12px">🗑 Clear History</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data/cookies.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
