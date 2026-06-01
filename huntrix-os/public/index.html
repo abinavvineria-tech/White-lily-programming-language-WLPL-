@@ -525,24 +525,25 @@
 
         <!-- Huntrix AI -->
         <section class="page" id="page-huntrix-ai" aria-label="Huntrix AI">
-          <h1>✦ Huntrix AI Assistant</h1>
-          <p>Your intelligent AI co-pilot for Huntrix OS.</p>
+          <h1>✦ Huntrix AI</h1>
+          <p>Your calm, mindful AI companion.</p>
           <div class="chat-container">
-            <div class="chat-messages" id="chat-messages">
-              <div class="chat-msg ai">Hello! I'm your Huntrix AI assistant. How can I help you today?</div>
-              <div class="chat-msg user">Show me the system status</div>
-              <div class="chat-msg ai">All systems are operational. CPU: 32%, RAM: 6.2 GB used, Storage: 234 GB free, Network: 847 Mbps. Any specific task you'd like to perform?</div>
+            <div class="chat-messages" id="ai-chat-messages">
+              <div class="chat-msg ai">Hello. I'm here, present and ready to help. What's on your mind?</div>
+            </div>
+            <div class="typing-indicator" id="typing-indicator">
+              <span></span><span></span><span></span>
             </div>
             <div class="chat-input-area">
-              <input type="text" id="chat-input" placeholder="Message Huntrix AI..." aria-label="Chat input">
-              <button class="btn-primary" id="chat-send">Send</button>
+              <input type="text" id="ai-input" placeholder="Breathe, then type..." aria-label="Chat input">
+              <button class="btn-primary" id="ai-send-btn">Send</button>
             </div>
           </div>
           <div class="quick-actions">
-            <button onclick="addChatMsg('ai','Running full system diagnostic...')">🔍 Run Diagnostic</button>
-            <button onclick="addChatMsg('ai','Optimizing system performance...')">⚡ Optimize System</button>
-            <button onclick="addChatMsg('ai','Scanning for vulnerabilities...')">🛡 Security Scan</button>
-            <button onclick="addChatMsg('ai','Cleaning temporary files...')">🧹 Clean Cache</button>
+            <button class="ai-quick-card" data-prompt="How is my system doing right now?">🔍 System Status</button>
+            <button class="ai-quick-card" data-prompt="Help me focus and clear distractions">🧘 Focus Mode</button>
+            <button class="ai-quick-card" data-prompt="Run a quick security check">🛡 Security Scan</button>
+            <button class="ai-quick-card" data-prompt="Suggest something to optimize">⚡ Optimize</button>
           </div>
         </section>
 
@@ -915,39 +916,8 @@
         });
       });
 
-      // Chat
-      document.getElementById('chat-send').addEventListener('click', function() {
-        sendChatMsg();
-      });
-      document.getElementById('chat-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') sendChatMsg();
-      });
-      function sendChatMsg() {
-        var input = document.getElementById('chat-input');
-        var text = input.value.trim();
-        if (!text) return;
-        addChatMsg('user', text);
-        input.value = '';
-        setTimeout(function() {
-          var responses = [
-            "I've analyzed that request. Here's what I found...",
-            "Processing your command. System resources are optimal.",
-            "That's a great idea! Let me set that up for you.",
-            "I've completed the task. Anything else you need?",
-            "Here are the results of the analysis you requested."
-          ];
-          addChatMsg('ai', responses[Math.floor(Math.random() * responses.length)]);
-        }, 800);
-      }
-      function addChatMsg(role, text) {
-        var container = document.getElementById('chat-messages');
-        var msg = document.createElement('div');
-        msg.className = 'chat-msg ' + role;
-        msg.textContent = text;
-        container.appendChild(msg);
-        container.scrollTop = container.scrollHeight;
-      }
-      window.addChatMsg = addChatMsg;
+      // HuntrixApp init placeholder - app.js will take over
+      window.HuntrixAppReady = true;
 
       // Pomodoro
       (function() {
