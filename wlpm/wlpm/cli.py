@@ -165,12 +165,7 @@ def cmd_config(args, installer: Installer):
     if args.config_command == "show":
         print()
         for key, value in installer.config.data.items():
-            if key in ("repositories",):
-                print(colorize(f"  {key}:", "green"))
-                for repo in value:
-                    print(colorize(f"    - {repo}", "dim"))
-            else:
-                print(colorize(f"  {key}: ", "green") + colorize(str(value), "silver"))
+            print(colorize(f"  {key}: ", "green") + colorize(str(value), "silver"))
         print()
     elif args.config_command == "set":
         installer.config.set(args.key, args.value)

@@ -2,9 +2,7 @@
 
 import os
 import re
-import shlex
 import subprocess
-import sys
 from typing import Optional
 
 
@@ -22,10 +20,7 @@ def detect_backend():
     return None
 
 
-def run(cmd, capture_output=True, check=False, quiet=False, timeout=300):
-    if not quiet:
-        from wlpm.ui import info
-        info(f"Running: {' '.join(cmd)}")
+def run(cmd, capture_output=True, check=False, timeout=300):
     try:
         result = subprocess.run(
             cmd,
@@ -35,10 +30,7 @@ def run(cmd, capture_output=True, check=False, quiet=False, timeout=300):
             timeout=timeout,
         )
         return result
-    except subprocess.CalledProcessError as e:
-        if not quiet:
-            from wlpm.ui import error
-            error(f"Command failed: {e.stderr.strip() if e.stderr else str(e)}")
+    except subprocess.CalledProcessError:
         raise
     except subprocess.TimeoutExpired:
         from wlpm.ui import error
@@ -94,31 +86,31 @@ class AptBackend(Backend):
 
     def install(self, packages, reinstall=False):
         cmd = ["apt", "install"] + (["--reinstall"] if reinstall else []) + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def remove(self, packages):
         cmd = ["apt", "remove"] + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def purge(self, packages):
         cmd = ["apt", "purge"] + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def update(self):
-        return run(["apt", "update"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "update"], capture_output=False, check=False,)
 
     def upgrade(self, packages=None):
         if packages:
             cmd = ["apt", "upgrade"] + packages
         else:
             cmd = ["apt", "upgrade"]
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def full_upgrade(self):
-        return run(["apt", "full-upgrade"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "full-upgrade"], capture_output=False, check=False,)
 
     def autoremove(self):
-        return run(["apt", "autoremove"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "autoremove"], capture_output=False, check=False,)
 
     def search(self, query):
         result = run(["apt", "search", query])
@@ -137,7 +129,7 @@ class AptBackend(Backend):
         return self._parse_list(result.stdout) if result else []
 
     def clean(self):
-        return run(["apt", "clean"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "clean"], capture_output=False, check=False,)
 
     def _parse_list(self, output):
         lines = output.strip().split("\n")[1:]
@@ -172,31 +164,31 @@ class PkgBackend(AptBackend):
 
     def install(self, packages, reinstall=False):
         cmd = ["pkg", "install"] + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def remove(self, packages):
         cmd = ["pkg", "uninstall"] + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def purge(self, packages):
         cmd = ["apt", "purge"] + packages
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def update(self):
-        return run(["pkg", "update"], capture_output=False, check=False, quiet=True)
+        return run(["pkg", "update"], capture_output=False, check=False,)
 
     def upgrade(self, packages=None):
         if packages:
             cmd = ["pkg", "upgrade"] + packages
         else:
             cmd = ["pkg", "upgrade"]
-        return run(cmd, capture_output=False, check=False, quiet=True)
+        return run(cmd, capture_output=False, check=False,)
 
     def full_upgrade(self):
-        return run(["pkg", "upgrade"], capture_output=False, check=False, quiet=True)
+        return run(["pkg", "upgrade"], capture_output=False, check=False,)
 
     def autoremove(self):
-        return run(["apt", "autoremove"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "autoremove"], capture_output=False, check=False,)
 
     def search(self, query):
         result = run(["pkg", "search", query])
@@ -215,7 +207,7 @@ class PkgBackend(AptBackend):
         return self._parse_list(result.stdout) if result else []
 
     def clean(self):
-        return run(["apt", "clean"], capture_output=False, check=False, quiet=True)
+        return run(["apt", "clean"], capture_output=False, check=False,)
 
     def _parse_pkg_list(self, output):
         lines = output.strip().split("\n")

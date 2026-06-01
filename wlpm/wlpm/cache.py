@@ -6,9 +6,6 @@ import shutil
 import time
 from typing import Optional
 
-from wlpm.package import PackageMetadata
-from wlpm.ui import info, error
-
 
 class Cache:
     def __init__(self, cache_dir: str):

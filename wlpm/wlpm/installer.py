@@ -1,12 +1,10 @@
 """Package installation, removal, and update logic using system package manager."""
 
 import os
-import re
-import shutil
 import subprocess
 
 from wlpm.backends import get_backend
-from wlpm.cache import InstallRecord, History
+from wlpm.cache import History
 from wlpm.ui import (
     success, error, info, warning,
     install_msg, remove_msg, update_msg, done_msg,
@@ -18,7 +16,6 @@ class Installer:
     def __init__(self, config):
         self.config = config
         self.backend = get_backend()
-        self.records = InstallRecord(config.install_dir)
         self.history = History(os.path.join(config.config_dir, "history"))
 
         if not self.backend:

@@ -6,16 +6,8 @@ import platform
 
 CONFIG_DIR_NAME = ".wlpm"
 CONFIG_FILE_NAME = "config.json"
-CACHE_DIR_NAME = "cache"
-INSTALL_DIR_NAME = "packages"
-REPOS_DIR_NAME = "repos"
 
 DEFAULT_CONFIG = {
-    "repositories": [
-        "https://raw.githubusercontent.com/white-lily/wlpm-repository/main/repository.json"
-    ],
-    "install_dir": "",
-    "cache_dir": "",
     "auto_update": True,
     "color": True,
     "verbose": False,
@@ -44,18 +36,6 @@ class Config:
         self.data = dict(DEFAULT_CONFIG)
         self._loaded = False
 
-    @property
-    def cache_dir(self) -> str:
-        return self.data.get("cache_dir") or os.path.join(self.config_dir, CACHE_DIR_NAME)
-
-    @property
-    def install_dir(self) -> str:
-        return self.data.get("install_dir") or os.path.join(self.config_dir, INSTALL_DIR_NAME)
-
-    @property
-    def repos_dir(self) -> str:
-        return os.path.join(self.config_dir, REPOS_DIR_NAME)
-
     def load(self):
         if os.path.exists(self.config_path):
             try:
@@ -78,5 +58,4 @@ class Config:
         self.data[key] = value
 
     def ensure_dirs(self):
-        for d in [self.config_dir, self.cache_dir, self.install_dir, self.repos_dir]:
-            os.makedirs(d, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
