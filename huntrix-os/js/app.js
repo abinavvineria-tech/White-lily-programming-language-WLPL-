@@ -1,1888 +1,1501 @@
-(function () {
-  'use strict';
+;(function () {
+  'use strict'
 
-  var HuntrixApp = {
-    version: '1.0.0',
-    user: null,
-    currentPage: 'dashboard',
-    chatHistory: [],
-    pomodoro: {
-      minutes: 25,
-      seconds: 0,
-      interval: null,
-      running: false,
-      mode: 'work'
+  // ============================================================
+  // STORE (State Management + Persistence)
+  // ============================================================
+  const Store = {
+    _user: null,
+    _data: null,
+    _prefs: null,
+    _listeners: [],
+
+    STORAGE_USERS_KEY: 'huntrix_users',
+    STORAGE_SESSION_KEY: 'huntrix_session',
+
+    get user () { return this._user },
+    set user (v) { this._user = v },
+
+    _hash (str) {
+      let hash = 0
+      for (let i = 0; i < str.length; i++) {
+        const chr = str.charCodeAt(i)
+        hash = ((hash << 5) - hash) + chr
+        hash |= 0
+      }
+      return Math.abs(hash).toString(16)
     },
-    mediaPlayer: {
-      currentIndex: 0,
-      playing: false,
-      items: []
+
+    getUsers () {
+      try { return JSON.parse(localStorage.getItem(this.STORAGE_USERS_KEY)) || [] }
+      catch { return [] }
     },
-    notifications: [],
-    searchResults: [],
-    browserTabs: [
-      { id: 'tab-1', title: 'New Tab', url: 'about:blank', active: true }
-    ]
-  };
 
-  // ============================================================
-  // UTILITY FUNCTIONS
-  // ============================================================
+    saveUsers (users) {
+      localStorage.setItem(this.STORAGE_USERS_KEY, JSON.stringify(users))
+    },
 
-  function formatDate(date) {
-    var d = new Date(date);
-    var now = new Date();
-    var diff = now - d;
-    var seconds = Math.floor(diff / 1000);
-    var minutes = Math.floor(seconds / 60);
-    var hours = Math.floor(minutes / 60);
-    var days = Math.floor(hours / 24);
+    register (username, password) {
+      if (!username || username.length < 3) return { ok: false, msg: 'Username must be at least 3 characters.' }
+      if (!/^[a-zA-Z0-9]+$/.test(username)) return { ok: false, msg: 'Username must be alphanumeric.' }
+      if (!password || password.length < 6) return { ok: false, msg: 'Password must be at least 6 characters.' }
 
-    if (seconds < 60) return 'just now';
-    if (minutes < 60) return minutes + 'm ago';
-    if (hours < 24) return hours + 'h ago';
-    if (days < 7) return days + 'd ago';
+      const users = this.getUsers()
+      if (users.some(u => u.username.toLowerCase() === username.toLowerCase()))
+        return { ok: false, msg: 'Username already taken.' }
 
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
+      const user = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        username, password: this._hash(password),
+        createdAt: new Date().toISOString(),
+        prefs: { theme: 'dark', accent: '#00d4ff', notifications: true }
+      }
+      users.push(user)
+      this.saveUsers(users)
+      this._setSession(user)
+      return { ok: true, msg: 'Registered successfully.', user }
+    },
 
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var i = Math.floor(Math.log(bytes) / Math.log(1024));
-    if (i >= units.length) i = units.length - 1;
-    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
-  }
+    login (username, password) {
+      if (!username || !password) return { ok: false, msg: 'Username and password required.' }
+      const users = this.getUsers()
+      const found = users.find(u => u.username.toLowerCase() === username.toLowerCase())
+      if (!found) return { ok: false, msg: 'User not found.' }
+      if (found.password !== this._hash(password)) return { ok: false, msg: 'Incorrect password.' }
+      this._setSession(found)
+      return { ok: true, msg: 'Welcome back!', user: found }
+    },
 
-  function truncate(str, len) {
-    if (!str) return '';
-    if (str.length <= len) return str;
-    return str.substring(0, len) + '...';
-  }
+    logout () {
+      localStorage.removeItem(this.STORAGE_SESSION_KEY)
+      this._user = null
+      this._data = null
+    },
 
-  function randomBetween(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
+    isAuth () { return !!localStorage.getItem(this.STORAGE_SESSION_KEY) },
 
-  function $(id) { return document.getElementById(id); }
+    _setSession (user) {
+      localStorage.setItem(this.STORAGE_SESSION_KEY, JSON.stringify(user))
+      this._user = user.username
+    },
 
-  function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+    init () {
+      try {
+        const raw = localStorage.getItem(this.STORAGE_SESSION_KEY)
+        if (raw) {
+          const u = JSON.parse(raw)
+          this._user = u.username
+          return true
+        }
+      } catch {}
+      return false
+    },
 
-  function qsa(sel, ctx) { return (ctx || document).querySelectorAll(sel); }
+    key () { return 'huntrix_data_' + this._user },
 
-  function debounce(fn, delay) {
-    var timer = null;
-    return function () {
-      var args = arguments;
-      var ctx = this;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(function () { fn.apply(ctx, args); }, delay);
-    };
-  }
+    prefsKey () { return 'huntrix_prefs_' + this._user },
 
-  // ============================================================
-  // MOCK DATA GENERATION
-  // ============================================================
+    getData () {
+      if (!this._user) return null
+      if (this._data) return this._data
+      const raw = localStorage.getItem(this.key())
+      if (raw) {
+        this._data = JSON.parse(raw)
+        return this._data
+      }
+      this._data = this._generateMockData()
+      this.saveData()
+      return this._data
+    },
 
-  function generateMockData(username) {
-    var packages = [
-      { id: 'pkg-1', name: 'neural-core', version: '2.4.1', description: 'Neural network processing core with TensorFlow integration', author: 'huntrix-labs', downloads: randomBetween(10000, 50000), category: 'ai', installed: true },
-      { id: 'pkg-2', name: 'quantum-crypto', version: '1.8.0', description: 'Post-quantum cryptographic algorithms and tools', author: 'security-team', downloads: randomBetween(8000, 30000), category: 'security', installed: false },
-      { id: 'pkg-3', name: 'huntrix-shell', version: '3.0.2', description: 'Next-gen terminal emulator with AI autocomplete', author: 'huntrix-os', downloads: randomBetween(20000, 60000), category: 'system', installed: true },
-      { id: 'pkg-4', name: 'cyber-vision', version: '1.2.5', description: 'Computer vision library with real-time object detection', author: 'ai-labs', downloads: randomBetween(5000, 20000), category: 'ai', installed: false },
-      { id: 'pkg-5', name: 'mesh-network', version: '0.9.8', description: 'Decentralized mesh networking protocol implementation', author: 'networks-inc', downloads: randomBetween(3000, 15000), category: 'network', installed: true },
-      { id: 'pkg-6', name: 'neuro-synth', version: '2.1.3', description: 'Neural audio synthesis and processing engine', author: 'audio-labs', downloads: randomBetween(7000, 25000), category: 'media', installed: false },
-      { id: 'pkg-7', name: 'data-forge', version: '4.0.1', description: 'Data transformation and ETL pipeline framework', author: 'data-team', downloads: randomBetween(12000, 40000), category: 'dev', installed: true },
-      { id: 'pkg-8', name: 'photon-ui', version: '1.5.0', description: 'Lightweight UI component library for terminal apps', author: 'ui-lab', downloads: randomBetween(15000, 45000), category: 'dev', installed: false },
-      { id: 'pkg-9', name: 'blockchain-lite', version: '0.5.2', description: 'Lightweight blockchain implementation for IoT devices', author: 'blockchain-inc', downloads: randomBetween(2000, 10000), category: 'network', installed: false },
-      { id: 'pkg-10', name: 'zerotrace', version: '1.0.0', description: 'Anonymous browsing and communication suite', author: 'privacy-team', downloads: randomBetween(9000, 35000), category: 'security', installed: true }
-    ];
+    saveData () {
+      if (!this._user || !this._data) return
+      localStorage.setItem(this.key(), JSON.stringify(this._data))
+    },
 
-    var repos = [
-      { id: 'repo-1', name: 'neural-core', description: 'Advanced neural network processing framework', stars: randomBetween(500, 3000), forks: randomBetween(100, 800), language: 'Python', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-2', name: 'quantum-crypto', description: 'Cryptographic primitives for post-quantum era', stars: randomBetween(300, 2500), forks: randomBetween(50, 600), language: 'Rust', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-3', name: 'huntrix-kernel', description: 'Huntrix OS microkernel source', stars: randomBetween(800, 5000), forks: randomBetween(200, 1000), language: 'C', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-4', name: 'mesh-protocol', description: 'Decentralized mesh networking protocol', stars: randomBetween(200, 2000), forks: randomBetween(40, 400), language: 'Go', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-5', name: 'neuro-synth-dsp', description: 'Digital signal processing for neural synthesis', stars: randomBetween(100, 1500), forks: randomBetween(20, 300), language: 'C++', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-6', name: 'data-forge-cli', description: 'Command-line data processing toolkit', stars: randomBetween(400, 2800), forks: randomBetween(80, 500), language: 'TypeScript', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-7', name: 'photon-render', description: 'Terminal UI rendering engine', stars: randomBetween(250, 1800), forks: randomBetween(30, 350), language: 'JavaScript', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() },
-      { id: 'repo-8', name: 'zerotrace-proxy', description: 'Anonymous proxy chain implementation', stars: randomBetween(150, 1200), forks: randomBetween(20, 200), language: 'Rust', updated: new Date(Date.now() - randomBetween(1, 30) * 86400000).toISOString() }
-    ];
+    getPrefs () {
+      if (!this._user) return { theme: 'dark', accent: '#00d4ff', notifications: true }
+      if (this._prefs) return this._prefs
+      const raw = localStorage.getItem(this.prefsKey())
+      if (raw) { this._prefs = JSON.parse(raw); return this._prefs }
+      return { theme: 'dark', accent: '#00d4ff', notifications: true }
+    },
 
-    var cloudFiles = [
-      { id: 'file-1', name: 'Project_Report_Q4.pdf', type: 'pdf', size: randomBetween(100000, 5000000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-2', name: 'system_backup_v2.tar.gz', type: 'archive', size: randomBetween(50000000, 200000000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-3', name: 'profile_photo.png', type: 'image', size: randomBetween(50000, 500000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: true },
-      { id: 'file-4', name: 'meeting_notes.txt', type: 'text', size: randomBetween(1000, 50000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-5', name: 'code_snippets.js', type: 'code', size: randomBetween(5000, 100000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-6', name: 'neural_model_weights.h5', type: 'model', size: randomBetween(10000000, 100000000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-7', name: 'presentation_deck.pptx', type: 'presentation', size: randomBetween(500000, 10000000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: true },
-      { id: 'file-8', name: 'dataset_training.csv', type: 'data', size: randomBetween(1000000, 50000000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-9', name: 'config.yaml', type: 'config', size: randomBetween(500, 10000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: false },
-      { id: 'file-10', name: 'architecture_diagram.svg', type: 'vector', size: randomBetween(10000, 100000), modified: new Date(Date.now() - randomBetween(1, 60) * 86400000).toISOString(), shared: true }
-    ];
+    savePrefs (prefs) {
+      if (!this._user) return
+      this._prefs = prefs
+      localStorage.setItem(this.prefsKey(), JSON.stringify(prefs))
+    },
 
-    var mediaItems = [
-      { id: 'media-1', title: 'Neural Sunrise', type: 'image', thumbnail: '', artist: 'AI Generated', duration: null },
-      { id: 'media-2', title: 'Quantum Dreams', type: 'music', thumbnail: '', artist: 'Synthwave Collective', duration: '3:45' },
-      { id: 'media-3', title: 'Huntrix OS Showcase', type: 'video', thumbnail: '', artist: 'Huntrix Studios', duration: '12:30' },
-      { id: 'media-4', title: 'Cyberpunk Cityscape', type: 'image', thumbnail: '', artist: 'AI Generated', duration: null },
-      { id: 'media-5', title: 'Digital Rain', type: 'video', thumbnail: '', artist: 'Demoscene', duration: '5:20' },
-      { id: 'media-6', title: 'Midnight Protocol', type: 'music', thumbnail: '', artist: 'Dark Tech', duration: '4:12' },
-      { id: 'media-7', title: 'Glitch Garden', type: 'image', thumbnail: '', artist: 'AI Generated', duration: null },
-      { id: 'media-8', title: 'System Boot Sequence', type: 'video', thumbnail: '', artist: 'Huntrix Studios', duration: '8:45' },
-      { id: 'media-9', title: 'Electro Pulse', type: 'music', thumbnail: '', artist: 'Bass Reactor', duration: '6:00' },
-      { id: 'media-10', title: 'Fractal Dreams', type: 'image', thumbnail: '', artist: 'AI Generated', duration: null }
-    ];
+    _rand (min, max) { return Math.floor(Math.random() * (max - min + 1)) + min },
 
-    var bookmarks = [
-      { id: 'bm-1', title: 'Huntrix OS Docs', url: 'https://docs.huntrix.os', icon: 'book' },
-      { id: 'bm-2', title: 'AI Research Hub', url: 'https://ai.huntrix.os', icon: 'brain' },
-      { id: 'bm-3', title: 'Package Repository', url: 'https://pkgs.huntrix.os', icon: 'package' },
-      { id: 'bm-4', title: 'Developer Portal', url: 'https://dev.huntrix.os', icon: 'code' },
-      { id: 'bm-5', title: 'Cloud Dashboard', url: 'https://cloud.huntrix.os', icon: 'cloud' },
-      { id: 'bm-6', title: 'Community Forums', url: 'https://community.huntrix.os', icon: 'users' }
-    ];
+    _generateMockData () {
+      const now = Date.now()
+      const day = 86400000
+      const pkgs = [
+        { id:'p1',name:'huntrix-ai-core',ver:'4.2.1',desc:'Neural network engine for AI tasks',author:'huntrix-labs',dl:this._rand(10,50),cat:'ai',inst:true },
+        { id:'p2',name:'nexus-shell',ver:'2.0.0',desc:'Next-gen terminal emulator',author:'huntrix-os',dl:this._rand(20,60),cat:'system',inst:true },
+        { id:'p3',name:'cipher-guard',ver:'1.8.3',desc:'End-to-end encryption toolkit',author:'security-team',dl:this._rand(8,30),cat:'security',inst:false },
+        { id:'p4',name:'quantum-vfs',ver:'3.1.0',desc:'Virtual file system layer',author:'huntrix-labs',dl:this._rand(5,20),cat:'system',inst:false },
+        { id:'p5',name:'lily-ui',ver:'5.0.2',desc:'UI component library',author:'ui-lab',dl:this._rand(15,45),cat:'dev',inst:true },
+        { id:'p6',name:'hyper-vault',ver:'2.3.1',desc:'Secure credential storage',author:'security-team',dl:this._rand(3,15),cat:'security',inst:false },
+        { id:'p7',name:'network-mesh',ver:'0.9.8',desc:'Decentralized mesh networking',author:'networks-inc',dl:this._rand(7,25),cat:'network',inst:true },
+        { id:'p8',name:'neuro-synth',ver:'2.1.3',desc:'Neural audio synthesis engine',author:'audio-labs',dl:this._rand(6,22),cat:'media',inst:false },
+        { id:'p9',name:'data-forge',ver:'4.0.1',desc:'Data transformation framework',author:'data-team',dl:this._rand(12,40),cat:'dev',inst:true },
+        { id:'p10',name:'photon-ui',ver:'1.5.0',desc:'Terminal UI library',author:'ui-lab',dl:this._rand(10,35),cat:'dev',inst:false },
+      ]
+      const repos = [
+        { id:'r1',name:'neural-nexus-engine',desc:'Advanced neural network framework',stars:this._rand(500,3000),lang:'Python',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+        { id:'r2',name:'huntrix-dashboard-ui',desc:'Dashboard frontend components',stars:this._rand(300,2500),lang:'JavaScript',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+        { id:'r3',name:'quantum-vfs-driver',desc:'Virtual filesystem driver',stars:this._rand(200,2000),lang:'Rust',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+        { id:'r4',name:'lily-package-manager',desc:'WLPM core implementation',stars:this._rand(400,2800),lang:'Go',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+        { id:'r5',name:'cipher-guard-core',desc:'Encryption primitives',stars:this._rand(150,1800),lang:'C++',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+        { id:'r6',name:'mesh-protocol',desc:'Networking protocol implementation',stars:this._rand(100,1500),lang:'TypeScript',updated:new Date(now-this._rand(1,30)*day).toISOString() },
+      ]
+      const files = [
+        { id:'f1',name:'project-report-q2.pdf',type:'pdf',size:this._rand(100,5000)*1000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:false },
+        { id:'f2',name:'screenshot-dashboard.png',type:'image',size:this._rand(50,500)*1000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:true },
+        { id:'f3',name:'backup-nexus-core.tar.gz',type:'archive',size:this._rand(50000,200000)*1000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:false },
+        { id:'f4',name:'media-assets',type:'folder',size:this._rand(100,900)*1000000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:false },
+        { id:'f5',name:'config.yaml',type:'code',size:this._rand(5,50)*1000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:false },
+        { id:'f6',name:'architecture.svg',type:'image',size:this._rand(10,100)*1000,mod:new Date(now-this._rand(1,60)*day).toISOString(),shared:true },
+      ]
+      const media = [
+        { id:'m1',title:'Neural Sunrise',type:'image',artist:'AI Generated' },
+        { id:'m2',title:'Quantum Dreams',type:'music',artist:'Synthwave Collective',dur:'3:45' },
+        { id:'m3',title:'Huntrix OS Showcase',type:'video',artist:'Huntrix Studios',dur:'12:30' },
+        { id:'m4',title:'Cyber Cityscape',type:'image',artist:'AI Generated' },
+        { id:'m5',title:'Digital Rain',type:'video',artist:'Demoscene',dur:'5:20' },
+        { id:'m6',title:'Midnight Protocol',type:'music',artist:'Dark Tech',dur:'4:12' },
+        { id:'m7',title:'Fractal Dreams',type:'image',artist:'AI Generated' },
+        { id:'m8',title:'Electro Pulse',type:'music',artist:'Bass Reactor',dur:'6:00' },
+      ]
+      const notes = [
+        { id:'n1',title:'Architecture Ideas',content:'Need to redesign the IPC layer. Consider lock-free queues.',created:now,crt:now-5*day,upd:now-2*day,pinned:true },
+        { id:'n2',title:'Meeting Notes',content:'Discussed training pipeline optimization. Key: mixed precision.',created:now,crt:now-3*day,upd:now-1*day,pinned:false },
+        { id:'n3',title:'Feature Requests',content:'1. Dark mode toggle\n2. Plugin system\n3. Network monitor',created:now,crt:now-7*day,upd:now-4*day,pinned:false },
+      ]
+      const tasks = [
+        { id:'t1',title:'Review system architecture',done:false,prio:'high',cat:'dev',due:new Date(now+3*day).toISOString() },
+        { id:'t2',title:'Update WLPM packages',done:false,prio:'medium',cat:'dev',due:new Date(now+1*day).toISOString() },
+        { id:'t3',title:'Backup cloud storage',done:true,prio:'high',cat:'sys',due:new Date(now-1*day).toISOString() },
+        { id:'t4',title:'Write API documentation',done:false,prio:'low',cat:'docs',due:new Date(now+7*day).toISOString() },
+        { id:'t5',title:'Configure firewall rules',done:true,prio:'medium',cat:'sec',due:new Date(now-2*day).toISOString() },
+      ]
+      const acts = [
+        { text:'Deployed Nexus Core to production',time:new Date(now-300000).toISOString() },
+        { text:'Package huntrix-ai installed',time:new Date(now-1800000).toISOString() },
+        { text:'Cloud backup completed — 2.4 GB synced',time:new Date(now-3600000).toISOString() },
+        { text:'Security scan passed all 12 tests',time:new Date(now-7200000).toISOString() },
+        { text:'Firewall rules updated for WAN',time:new Date(now-14400000).toISOString() },
+        { text:'System health check completed',time:new Date(now-36000000).toISOString() },
+        { text:'Development build #1284 passed',time:new Date(now-172800000).toISOString() },
+      ]
 
-    var notes = [
-      { id: 'note-1', title: 'System Architecture Ideas', content: 'Need to redesign the microkernel inter-process communication layer. Current implementation has too much latency. Consider using shared memory regions with lock-free queues.', created: new Date(Date.now() - 86400000 * 5).toISOString(), updated: new Date(Date.now() - 86400000 * 2).toISOString(), pinned: true },
-      { id: 'note-2', title: 'Meeting Notes - AI Team', content: 'Discussed neural network training pipeline optimization. Key decisions: switch to mixed precision training, implement gradient checkpointing, reduce batch size for memory constraints.', created: new Date(Date.now() - 86400000 * 3).toISOString(), updated: new Date(Date.now() - 86400000 * 1).toISOString(), pinned: false },
-      { id: 'note-3', title: 'Feature Requests', content: '1. Dark mode toggle for terminal\n2. Plugin system for file manager\n3. Built-in network monitor\n4. Custom keyboard shortcuts\n5. Widget system for dashboard', created: new Date(Date.now() - 86400000 * 7).toISOString(), updated: new Date(Date.now() - 86400000 * 4).toISOString(), pinned: false },
-      { id: 'note-4', title: 'Quantum Crypto Research', content: 'Interesting paper on lattice-based cryptography for post-quantum security. Need to evaluate NTRU and Kyber implementations for integration into the security stack.', created: new Date(Date.now() - 86400000 * 1).toISOString(), updated: new Date(Date.now() - 86400000 * 0.5).toISOString(), pinned: true }
-    ];
-
-    var tasks = [
-      { id: 'task-1', title: 'Implement IPC shared memory', completed: false, priority: 'high', dueDate: new Date(Date.now() + 86400000 * 3).toISOString(), category: 'development' },
-      { id: 'task-2', title: 'Review PR #342 - Network stack', completed: false, priority: 'medium', dueDate: new Date(Date.now() + 86400000 * 1).toISOString(), category: 'development' },
-      { id: 'task-3', title: 'Update security certificates', completed: true, priority: 'high', dueDate: new Date(Date.now() - 86400000 * 1).toISOString(), category: 'security' },
-      { id: 'task-4', title: 'Write documentation for API v2', completed: false, priority: 'low', dueDate: new Date(Date.now() + 86400000 * 7).toISOString(), category: 'docs' },
-      { id: 'task-5', title: 'Fix memory leak in neural-core', completed: false, priority: 'high', dueDate: new Date(Date.now() + 86400000 * 2).toISOString(), category: 'development' },
-      { id: 'task-6', title: 'Plan team sprint retrospective', completed: true, priority: 'medium', dueDate: new Date(Date.now() - 86400000 * 2).toISOString(), category: 'management' }
-    ];
-
-    var activities = [
-      { id: 'act-1', text: 'System update completed successfully', time: new Date(Date.now() - 300000).toISOString(), type: 'system' },
-      { id: 'act-2', text: 'New package installed: neural-core v2.4.1', time: new Date(Date.now() - 1800000).toISOString(), type: 'package' },
-      { id: 'act-3', text: 'Cloud sync completed - 12 files updated', time: new Date(Date.now() - 3600000).toISOString(), type: 'cloud' },
-      { id: 'act-4', text: 'Security scan finished - no threats detected', time: new Date(Date.now() - 7200000).toISOString(), type: 'security' },
-      { id: 'act-5', text: 'AI model training completed (accuracy: 94.2%)', time: new Date(Date.now() - 14400000).toISOString(), type: 'ai' },
-      { id: 'act-6', text: 'New repo forked: neural-core → neural-core-dev', time: new Date(Date.now() - 36000000).toISOString(), type: 'git' },
-      { id: 'act-7', text: 'Backup created: system_backup_v2.tar.gz', time: new Date(Date.now() - 86400000).toISOString(), type: 'system' },
-      { id: 'act-8', text: 'Network interface eth0: IP renewed', time: new Date(Date.now() - 172800000).toISOString(), type: 'network' },
-      { id: 'act-9', text: 'Development build #1284 passed all tests', time: new Date(Date.now() - 259200000).toISOString(), type: 'dev' },
-      { id: 'act-10', text: 'Weekly analytics report generated', time: new Date(Date.now() - 604800000).toISOString(), type: 'analytics' }
-    ];
-
-    var stats = {
-      cpu: randomBetween(15, 85),
-      ram: randomBetween(30, 90),
-      storage: randomBetween(25, 75),
-      network: randomBetween(10, 60)
-    };
-
-    var data = {
-      packages: packages,
-      repos: repos,
-      cloudFiles: cloudFiles,
-      mediaItems: mediaItems,
-      bookmarks: bookmarks,
-      notes: notes,
-      tasks: tasks,
-      activities: activities,
-      stats: stats,
-      notesCounter: 5,
-      tasksCounter: 7,
-      chatHistory: []
-    };
-
-    localStorage.setItem('huntrix_data_' + username, JSON.stringify(data));
-    return data;
-  }
-
-  function getData() {
-    if (!HuntrixApp.user) return null;
-    var key = 'huntrix_data_' + HuntrixApp.user;
-    var raw = localStorage.getItem(key);
-    if (!raw) {
-      return generateMockData(HuntrixApp.user);
+      return {
+        stats: { cpu: this._rand(15,85), ram: this._rand(30,90), storage: this._rand(25,75), network: this._rand(10,60) },
+        packages: pkgs, repos, cloudFiles: files, mediaItems: media,
+        notes, tasks, activities: acts,
+        ownedCookies: [],
+        favoriteCookies: [],
+        pullHistory: [],
+        noteCounter: Date.now(),
+        taskCounter: Date.now()
+      }
     }
-    return JSON.parse(raw);
-  }
-
-  function saveData(data) {
-    if (!HuntrixApp.user) return;
-    var key = 'huntrix_data_' + HuntrixApp.user;
-    localStorage.setItem(key, JSON.stringify(data));
   }
 
   // ============================================================
-  // THEME MANAGEMENT
+  // TOAST SYSTEM
   // ============================================================
-
-  function applyTheme(theme) {
-    if (theme === 'light') {
-      document.documentElement.removeAttribute('data-theme');
-    } else {
-      document.documentElement.setAttribute('data-theme', theme);
+  const Toast = {
+    container: null,
+    init () {
+      this.container = document.getElementById('toast-container')
+      if (!this.container) {
+        this.container = document.createElement('div')
+        this.container.id = 'toast-container'
+        this.container.className = 'toast-container'
+        document.body.appendChild(this.container)
+      }
+    },
+    show (title, message, type) {
+      type = type || 'info'
+      const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' }
+      const el = document.createElement('div')
+      el.className = 'toast ' + type
+      el.innerHTML = '<div class="toast-icon">' + (icons[type] || 'ℹ') + '</div><div class="toast-content"><div class="toast-title">' + title + '</div><div class="toast-message">' + (message || '') + '</div></div><button class="toast-close">×</button>'
+      el.querySelector('.toast-close').addEventListener('click', () => el.remove())
+      this.container.appendChild(el)
+      setTimeout(() => { if (el.parentNode) { el.style.opacity = '0'; el.style.transform = 'translateX(100px)'; setTimeout(() => el.remove(), 300) } }, 4000)
     }
-    var prefs = getPreferences();
-    prefs.theme = theme;
-    savePreferences(prefs);
-  }
-
-  function applyAccent(color) {
-    document.documentElement.style.setProperty('--neon-color', color);
-    var prefs = getPreferences();
-    prefs.accent = color;
-    savePreferences(prefs);
-  }
-
-  function getPreferences() {
-    if (!HuntrixApp.user) return { theme: 'dark', accent: '#00f0ff', notifications: true };
-    var key = 'huntrix_prefs_' + HuntrixApp.user;
-    var raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-    return { theme: 'dark', accent: '#00f0ff', notifications: true };
-  }
-
-  function savePreferences(prefs) {
-    if (!HuntrixApp.user) return;
-    var key = 'huntrix_prefs_' + HuntrixApp.user;
-    localStorage.setItem(key, JSON.stringify(prefs));
   }
 
   // ============================================================
-  // NOTIFICATION CENTER
+  // UTILITIES
   // ============================================================
+  const $ = id => document.getElementById(id)
+  const qs = (s, c) => (c || document).querySelector(s)
+  const qsa = (s, c) => (c || document).querySelectorAll(s)
 
-  function initNotifications() {
-    var bell = $('notification-bell');
-    var dropdown = $('notification-dropdown');
-    if (!bell || !dropdown) return;
-
-    bell.addEventListener('click', function (e) {
-      e.stopPropagation();
-      dropdown.classList.toggle('active');
-    });
-
-    document.addEventListener('click', function () {
-      dropdown.classList.remove('active');
-    });
-
-    dropdown.addEventListener('click', function (e) {
-      e.stopPropagation();
-    });
-
-    var markReadBtn = qs('.mark-all-read', dropdown);
-    if (markReadBtn) {
-      markReadBtn.addEventListener('click', function () {
-        HuntrixApp.notifications.forEach(function (n) { n.read = true; });
-        renderNotifications();
-      });
-    }
-
-    addNotification('Welcome to Huntrix OS Dashboard v' + HuntrixApp.version, 'system');
+  function fmtDate (date) {
+    const d = new Date(date), now = new Date()
+    const diff = now - d
+    const sec = Math.floor(diff / 1000)
+    if (sec < 60) return 'just now'
+    const min = Math.floor(sec / 60)
+    if (min < 60) return min + 'm ago'
+    const hr = Math.floor(min / 60)
+    if (hr < 24) return hr + 'h ago'
+    const days = Math.floor(hr / 24)
+    if (days < 7) return days + 'd ago'
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  function addNotification(text, type) {
-    HuntrixApp.notifications.unshift({
-      id: 'notif-' + Date.now(),
-      text: text,
-      type: type || 'system',
-      time: new Date().toISOString(),
-      read: false
-    });
-    if (HuntrixApp.notifications.length > 50) {
-      HuntrixApp.notifications.pop();
-    }
-    renderNotifications();
+  function fmtBytes (bytes) {
+    if (bytes === 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
   }
 
-  function renderNotifications() {
-    var list = $('notification-list');
-    var count = $('notification-count');
-    var dropdown = $('notification-dropdown');
-    if (!list) return;
+  function trunc (str, len) {
+    if (!str) return ''
+    return str.length <= len ? str : str.slice(0, len) + '…'
+  }
 
-    var unread = 0;
-    var html = '';
-    HuntrixApp.notifications.forEach(function (n) {
-      if (!n.read) unread++;
-      html += '<div class="notification-item' + (n.read ? ' read' : ' unread') + '" data-id="' + n.id + '">';
-      html += '<div class="notif-icon notif-' + n.type + '"></div>';
-      html += '<div class="notif-content">';
-      html += '<p class="notif-text">' + n.text + '</p>';
-      html += '<span class="notif-time">' + formatDate(n.time) + '</span>';
-      html += '</div></div>';
-    });
-    list.innerHTML = html;
+  function debounce (fn, ms) {
+    let t
+    return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms) }
+  }
 
-    if (count) {
-      count.textContent = unread;
-      count.style.display = unread > 0 ? 'flex' : 'none';
+  function rarityColor (r) {
+    const map = {
+      'Beast': '#ff2200', 'Ancient': '#ffd700', 'Legendary': '#ff6bff',
+      'Dragon': '#ff4444', 'Super Epic': '#ff884d', 'Epic': '#a855f7',
+      'Rare': '#60a5fa', 'Common': '#94a3b8'
+    }
+    return map[r] || '#94a3b8'
+  }
+
+  function rarityBg (r) {
+    const map = {
+      'Beast': 'rgba(255,34,0,0.15)', 'Ancient': 'rgba(255,215,0,0.12)',
+      'Legendary': 'rgba(255,107,255,0.12)', 'Dragon': 'rgba(255,68,68,0.12)',
+      'Super Epic': 'rgba(255,136,77,0.12)', 'Epic': 'rgba(168,85,247,0.12)',
+      'Rare': 'rgba(96,165,250,0.12)', 'Common': 'rgba(148,163,184,0.12)'
+    }
+    return map[r] || 'rgba(148,163,184,0.12)'
+  }
+
+  // ============================================================
+  // THEME
+  // ============================================================
+  function applyTheme (theme) {
+    document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark')
+  }
+
+  function applyAccent (color) {
+    document.documentElement.style.setProperty('--neon-color', color)
+    document.documentElement.style.setProperty('--accent-primary', color)
+    if (color === '#00d4ff') {
+      document.documentElement.style.setProperty('--accent-primary-hover', '#33ddff')
+      document.documentElement.style.setProperty('--accent-glow', 'rgba(0,212,255,0.3)')
+    }
+  }
+
+  // ============================================================
+  // NAVIGATION (Router)
+  // ============================================================
+  let currentPage = 'dashboard'
+  const pageHandlers = {}
+
+  function registerPage (name, handler) { pageHandlers[name] = handler }
+
+  function navigateTo (pageId) {
+    qsa('.page').forEach(p => p.classList.remove('active'))
+    qsa('.nav-link').forEach(n => n.classList.remove('active'))
+
+    const target = $('page-' + pageId)
+    if (target) target.classList.add('active')
+
+    const navItem = qs('.nav-link[data-page="' + pageId + '"]')
+    if (navItem) navItem.classList.add('active')
+
+    currentPage = pageId
+    const titleEl = $('page-title')
+    if (titleEl) titleEl.textContent = (qs('.nav-link[data-page="' + pageId + '"] .nav-label') || {}).textContent || pageId
+
+    if (pageHandlers[pageId]) pageHandlers[pageId]()
+  }
+
+  function initNavigation () {
+    qsa('.nav-link').forEach(n => {
+      n.addEventListener('click', e => {
+        e.preventDefault()
+        const page = n.getAttribute('data-page')
+        if (page) navigateTo(page)
+        const sidebar = qs('.sidebar')
+        if (sidebar) sidebar.classList.remove('open')
+        qs('.sidebar-overlay')?.classList.remove('open')
+      })
+    })
+    const hamburger = $('hamburger-btn')
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        qs('.sidebar').classList.toggle('open')
+        let ov = qs('.sidebar-overlay')
+        if (!ov) {
+          ov = document.createElement('div')
+          ov.className = 'sidebar-overlay'
+          document.body.appendChild(ov)
+          ov.addEventListener('click', () => { qs('.sidebar').classList.remove('open'); ov.classList.remove('open') })
+        }
+        ov.classList.toggle('open')
+      })
+    }
+  }
+
+  // ============================================================
+  // COMMAND PALETTE
+  // ============================================================
+  function initCommandPalette () {
+    const overlay = $('command-palette-overlay')
+    const input = $('command-palette-input')
+    const results = $('command-palette-results')
+    if (!overlay) return
+
+    let selectedIdx = -1
+
+    function open () {
+      overlay.classList.add('open')
+      setTimeout(() => input.focus(), 100)
+      selectedIdx = -1
+      filterCommands('')
     }
 
-    if (dropdown) {
-      var badge = qs('.notif-badge', dropdown);
-      if (badge) badge.textContent = unread;
+    function close () {
+      overlay.classList.remove('open')
+      input.value = ''
+      results.innerHTML = ''
     }
+
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); overlay.classList.contains('open') ? close() : open() }
+      if (e.key === 'Escape' && overlay.classList.contains('open')) close()
+    })
+
+    input.addEventListener('input', () => filterCommands(input.value))
+
+    input.addEventListener('keydown', e => {
+      const items = qsa('.command-palette-item', results)
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, items.length - 1); highlight(items) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); highlight(items) }
+      else if (e.key === 'Enter') { e.preventDefault(); const sel = qs('.command-palette-item.selected', results); if (sel) sel.click() }
+    })
+
+    function highlight (items) {
+      items.forEach((it, i) => it.classList.toggle('selected', i === selectedIdx))
+      if (items[selectedIdx]) items[selectedIdx].scrollIntoView({ block: 'nearest' })
+    }
+
+    function filterCommands (query) {
+      const q = query.toLowerCase().trim()
+      const commands = [
+        { id: 'nav-dashboard', title: 'Go to Dashboard', desc: 'View system overview', icon: '⌂', action: () => { close(); navigateTo('dashboard') } },
+        { id: 'nav-crk', title: 'Go to CRK Gacha', desc: 'Cookie collection tracker', icon: '🍪', action: () => { close(); navigateTo('crk-gacha') } },
+        { id: 'nav-analytics', title: 'Go to Analytics', desc: 'Pull history and achievements', icon: '📊', action: () => { close(); navigateTo('analytics') } },
+        { id: 'nav-wlpm', title: 'Go to WLPM', desc: 'Package manager', icon: '◈', action: () => { close(); navigateTo('wlpm') } },
+        { id: 'nav-devhub', title: 'Go to Dev Hub', desc: 'Developer tools', icon: '⚙', action: () => { close(); navigateTo('developer-hub') } },
+        { id: 'nav-cloud', title: 'Go to Cloud Center', desc: 'File management', icon: '☁', action: () => { close(); navigateTo('cloud-center') } },
+        { id: 'nav-media', title: 'Go to Media Center', desc: 'Media library', icon: '▶', action: () => { close(); navigateTo('media-center') } },
+        { id: 'nav-browser', title: 'Go to Browser', desc: 'Web browser', icon: '🌐', action: () => { close(); navigateTo('browser') } },
+        { id: 'nav-productivity', title: 'Go to Productivity', desc: 'Notes, tasks, pomodoro', icon: '✓', action: () => { close(); navigateTo('productivity') } },
+        { id: 'nav-settings', title: 'Go to Settings', desc: 'Preferences and data management', icon: '⚡', action: () => { close(); navigateTo('settings') } },
+        { id: 'act-export', title: 'Export Data', desc: 'Download all data as JSON', icon: '⬇', action: () => { close(); exportAllData() } },
+        { id: 'act-import', title: 'Import Data', desc: 'Restore from JSON backup', icon: '📂', action: () => { close(); $('import-file-input').click() } },
+      ]
+
+      if (q.length >= 2) {
+        const cookies = window.CRK_COOKIES || []
+        cookies.forEach(c => {
+          if (c.name.toLowerCase().includes(q)) {
+            commands.push({ id: 'cookie-' + c.id, title: c.name + ' (' + c.rarity + ')', desc: 'View cookie details', icon: '🍪', action: () => { close(); navigateTo('crk-gacha') } })
+          }
+        })
+      }
+
+      const filtered = q ? commands.filter(c => c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q)) : commands
+
+      if (filtered.length === 0) {
+        results.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">No results found</div>'
+        return
+      }
+
+      results.innerHTML = filtered.map((c, i) =>
+        '<div class="command-palette-item' + (i === selectedIdx ? ' selected' : '') + '" data-id="' + c.id + '">' +
+        '<span class="cp-icon">' + c.icon + '</span>' +
+        '<div class="cp-info"><div class="cp-title">' + c.title + '</div><div class="cp-desc">' + c.desc + '</div></div>' +
+        '</div>'
+      ).join('')
+
+      qsa('.command-palette-item', results).forEach(el => {
+        el.addEventListener('click', () => {
+          const cmd = filtered.find(c => c.id === el.getAttribute('data-id'))
+          if (cmd) cmd.action()
+        })
+      })
+    }
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) close() })
+  }
+
+  // ============================================================
+  // NOTIFICATIONS
+  // ============================================================
+  let notifications = []
+
+  function addNotif (text, type) {
+    type = type || 'system'
+    notifications.unshift({ id: 'n-' + Date.now(), text, type, time: new Date().toISOString(), read: false })
+    if (notifications.length > 30) notifications.pop()
+    renderNotifs()
+    const prefs = Store.getPrefs()
+    if (prefs.notifications !== false) Toast.show(type.charAt(0).toUpperCase() + type.slice(1), text, type === 'system' ? 'info' : type)
+  }
+
+  function renderNotifs () {
+    const list = $('notification-list')
+    const count = $('notif-count')
+    if (!list) return
+    let unread = 0
+    list.innerHTML = notifications.map(n => {
+      if (!n.read) unread++
+      return '<div class="dropdown-notification' + (n.read ? '' : ' unread') + '" data-id="' + n.id + '">' +
+        '<div class="notif-icon">' + (n.type === 'system' ? '⚡' : n.type === 'package' ? '◈' : n.type === 'achievement' ? '🏆' : n.type === 'error' ? '⚠' : 'ℹ') + '</div>' +
+        '<div class="notif-content"><div class="notif-title">' + n.text + '</div><div class="notif-meta">' + fmtDate(n.time) + '</div></div></div>'
+    }).join('')
+    if (count) { count.textContent = unread; count.style.display = unread > 0 ? 'flex' : 'none' }
+  }
+
+  function initNotifications () {
+    const btn = $('notif-btn')
+    const dd = $('notif-dropdown')
+    if (!btn || !dd) return
+    btn.addEventListener('click', e => { e.stopPropagation(); dd.classList.toggle('open') })
+    document.addEventListener('click', () => dd.classList.remove('open'))
+    dd.addEventListener('click', e => e.stopPropagation())
+    $('mark-all-read')?.addEventListener('click', () => { notifications.forEach(n => n.read = true); renderNotifs() })
+    addNotif('Welcome to Huntrix OS v2.0', 'system')
+    addNotif('System update completed successfully', 'system')
   }
 
   // ============================================================
   // GLOBAL SEARCH
   // ============================================================
-
-  function initSearch() {
-    var searchInput = $('global-search');
-    var resultsContainer = $('search-results');
-    if (!searchInput || !resultsContainer) return;
-
-    searchInput.addEventListener('input', debounce(function () {
-      var query = searchInput.value.trim();
-      if (query.length < 2) {
-        resultsContainer.classList.remove('active');
-        resultsContainer.innerHTML = '';
-        return;
-      }
-      performSearch(query);
-    }, 300));
-
-    document.addEventListener('click', function (e) {
-      if (!e.target.closest('.search-bar')) {
-        resultsContainer.classList.remove('active');
-      }
-    });
+  function initSearch () {
+    const input = $('global-search')
+    if (!input) return
+    const hint = $('search-shortcut-hint')
+    if (hint) hint.addEventListener('click', () => { $('command-palette-overlay')?.classList.add('open'); $('command-palette-input')?.focus() })
   }
 
-  function performSearch(query) {
-    var data = getData();
-    if (!data) return;
-    var q = query.toLowerCase();
-    var results = [];
+  // ============================================================
+  // PAGE HANDLERS
+  // ============================================================
 
-    data.packages.forEach(function (pkg) {
-      if (pkg.name.toLowerCase().indexOf(q) !== -1 || pkg.description.toLowerCase().indexOf(q) !== -1) {
-        results.push({ id: pkg.id, title: pkg.name, subtitle: pkg.description, page: 'wlpm', type: 'package' });
-      }
-    });
+  // --- DASHBOARD ---
+  registerPage('dashboard', () => {
+    const data = Store.getData()
+    if (!data) return
 
-    data.repos.forEach(function (repo) {
-      if (repo.name.toLowerCase().indexOf(q) !== -1 || repo.description.toLowerCase().indexOf(q) !== -1) {
-        results.push({ id: repo.id, title: repo.name, subtitle: repo.description, page: 'crk', type: 'repo' });
-      }
-    });
+    const grid = $('stat-grid')
+    const cards = [
+      { label: 'CPU', value: data.stats.cpu + '%', icon: '⚡', color: 'var(--accent-primary)' },
+      { label: 'RAM', value: data.stats.ram + '%', icon: '▦', color: 'var(--accent-secondary)' },
+      { label: 'Storage', value: data.stats.storage + '%', icon: '💾', color: 'var(--accent-success)' },
+      { label: 'Collection', value: data.ownedCookies?.length || 0 + ' / ' + (window.CRK_COOKIES?.length || 64), icon: '🍪', color: 'var(--accent-warning)' },
+    ]
+    grid.innerHTML = cards.map((c, i) =>
+      '<div class="stat-card"><div class="stat-icon' + (i === 1 ? ' purple' : i === 2 ? ' green' : i === 3 ? ' orange' : '') + '">' + c.icon + '</div><div class="stat-info"><div class="stat-value">' + c.value + '</div><div class="stat-label">' + c.label + '</div></div></div>'
+    ).join('')
 
-    data.notes.forEach(function (note) {
-      if (note.title.toLowerCase().indexOf(q) !== -1 || note.content.toLowerCase().indexOf(q) !== -1) {
-        results.push({ id: note.id, title: note.title, subtitle: truncate(note.content, 60), page: 'productivity', type: 'note' });
-      }
-    });
+    const actList = $('activity-list')
+    actList.innerHTML = data.activities.slice(0, 6).map(a =>
+      '<div class="activity-item"><span class="activity-dot"></span><span class="activity-text">' + a.text + '</span><span class="activity-time">' + fmtDate(a.time) + '</span></div>'
+    ).join('')
 
-    data.cloudFiles.forEach(function (file) {
-      if (file.name.toLowerCase().indexOf(q) !== -1) {
-        results.push({ id: file.id, title: file.name, subtitle: formatBytes(file.size), page: 'cloud', type: 'file' });
-      }
-    });
+    const sysStatus = $('system-status')
+    sysStatus.innerHTML = [
+      { label: 'Security Shield', val: 'Active', ok: true },
+      { label: 'AI Engine', val: 'Online', ok: true },
+      { label: 'Cloud Sync', val: 'Synced', ok: true },
+      { label: 'Database Cluster', val: 'Operational', ok: true },
+      { label: 'VPN Tunnel', val: 'Degraded', ok: false },
+    ].map(s =>
+      '<div class="status-item' + (s.ok ? '' : ' warning') + '"><span class="status-dot"></span><span class="status-label">' + s.label + '</span><span class="status-value">' + s.val + '</span></div>'
+    ).join('')
+  })
 
-    HuntrixApp.searchResults = results;
-    renderSearchResults(results);
+  // --- CRK GACHA ---
+  registerPage('crk-gacha', () => {
+    const data = Store.getData()
+    if (!data) return
+    renderCRK(data)
+  })
+
+  let crkFilter = 'all'
+  let crkSort = 'default'
+
+  function renderCRK (data) {
+    const cookies = window.CRK_COOKIES || []
+    const owned = data.ownedCookies || []
+    const favs = data.favoriteCookies || []
+    const ownedSet = new Set(owned)
+    const favSet = new Set(favs)
+    const total = cookies.length
+    const ownedCount = owned.length
+    const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0
+
+    const bar = $('crk-stats-bar')
+    bar.innerHTML =
+      '<div class="stat"><div class="stat-num neon-text">' + ownedCount + '</div><div class="stat-lbl">Owned</div></div>' +
+      '<div class="stat"><div class="stat-num">' + total + '</div><div class="stat-lbl">Total</div></div>' +
+      '<div class="stat-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="stat"><div class="stat-num">' + pct + '%</div><div class="stat-lbl">Complete</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (favs.length) + '</div><div class="stat-lbl">⭐ Favorites</div></div>'
+
+    const rarityStats = $('crk-rarity-stats')
+    const rarityCounts = {}
+    cookies.forEach(c => { rarityCounts[c.rarity] = (rarityCounts[c.rarity] || 0) + 1 })
+    const rarityOwned = {}
+    owned.forEach(id => { const c = cookies.find(cc => cc.id === id); if (c) rarityOwned[c.rarity] = (rarityOwned[c.rarity] || 0) + 1 })
+    const order = ['Beast','Ancient','Legendary','Dragon','Super Epic','Epic','Rare','Common']
+    rarityStats.innerHTML = order.filter(r => rarityCounts[r]).map(r =>
+      '<span class="crk-rarity-stat"><span class="rs-dot" style="background:' + rarityColor(r) + '"></span><span class="rs-num" style="color:' + rarityColor(r) + '">' + (rarityOwned[r] || 0) + '</span><span class="rs-total">/ ' + rarityCounts[r] + '</span></span>'
+    ).join('')
+
+    let filtered = cookies.slice()
+    if (crkFilter !== 'all') filtered = filtered.filter(c => c.rarity === crkFilter)
+
+    const query = ($('crk-search')?.value || '').toLowerCase().trim()
+    if (query) filtered = filtered.filter(c => c.name.toLowerCase().includes(query))
+
+    if (crkSort === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name))
+    else if (crkSort === 'power-desc') filtered.sort((a, b) => b.power - a.power)
+    else if (crkSort === 'power-asc') filtered.sort((a, b) => a.power - b.power)
+    else if (crkSort === 'released') filtered.sort((a, b) => a.released.localeCompare(b.released))
+    else filtered.sort((a, b) => (window.RARITY_ORDER[a.rarity] || 99) - (window.RARITY_ORDER[b.rarity] || 99))
+
+    const grid = $('crk-grid')
+    grid.innerHTML = filtered.map(c => {
+      const isOwned = ownedSet.has(c.id)
+      const isFav = favSet.has(c.id)
+      const color = rarityColor(c.rarity)
+      return '<div class="cookie-card' + (isOwned ? ' obtained' : '') + (isFav ? ' favorite' : '') + '" data-id="' + c.id + '">' +
+        '<span class="check-mark">' + (isOwned ? '✓' : '') + '</span>' +
+        '<button class="fav-btn" data-id="' + c.id + '">' + (isFav ? '⭐' : '☆') + '</button>' +
+        '<button class="rm-btn" data-id="' + c.id + '">✕</button>' +
+        '<span class="cookie-icon">' + (c.icon || '🍪') + '</span>' +
+        '<div class="cookie-name">' + c.name + '</div>' +
+        '<div class="cookie-power">⚡ ' + c.power + '</div>' +
+        '<span class="cookie-rarity" style="color:' + color + ';background:' + rarityBg(c.rarity) + ';color:' + color + '">' + c.rarity + '</span>' +
+        '</div>'
+    }).join('')
+
+    qsa('.cookie-card', grid).forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.closest('.fav-btn') || e.target.closest('.rm-btn')) return
+        const id = el.getAttribute('data-id')
+        const idx = owned.indexOf(id)
+        if (idx >= 0) { owned.splice(idx, 1); el.classList.remove('obtained'); el.classList.remove('just-obtained') }
+        else { owned.push(id); el.classList.add('obtained'); el.classList.add('just-obtained'); addNotif('⭐ Collected: ' + (cookies.find(c => c.id === id)?.name || id), 'system') }
+        data.ownedCookies = owned
+        Store.saveData()
+        setTimeout(() => renderCRK(data), 50)
+      })
+    })
+
+    qsa('.fav-btn', grid).forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation()
+        const id = btn.getAttribute('data-id')
+        const idx = favs.indexOf(id)
+        if (idx >= 0) { favs.splice(idx, 1); btn.textContent = '☆' }
+        else { favs.push(id); btn.textContent = '⭐'; addNotif('⭐ Added ' + (cookies.find(c => c.id === id)?.name || id) + ' to favorites', 'system') }
+        data.favoriteCookies = favs
+        Store.saveData()
+      })
+    })
+
+    qsa('.rm-btn', grid).forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation()
+        const id = btn.getAttribute('data-id')
+        const idx = owned.indexOf(id)
+        if (idx >= 0) { owned.splice(idx, 1); data.ownedCookies = owned; Store.saveData(); renderCRK(data) }
+        const fidx = favs.indexOf(id)
+        if (fidx >= 0) { favs.splice(fidx, 1); data.favoriteCookies = favs; Store.saveData() }
+      })
+    })
+
+    const searchInput = $('crk-search')
+    searchInput._listener?.()
+    const listener = debounce(() => renderCRK(Store.getData()), 200)
+    searchInput._listener = listener
+    searchInput.addEventListener('input', listener)
+
+    const sortEl = $('crk-sort')
+    sortEl.addEventListener('change', () => { crkSort = sortEl.value; renderCRK(Store.getData()) })
   }
 
-  function renderSearchResults(results) {
-    var container = $('search-results');
-    if (!container) return;
+  // CRK Filters & Add
+  $('crk-filters')?.addEventListener('click', e => {
+    const btn = e.target.closest('button')
+    if (!btn) return
+    qsa('#crk-filters button').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    crkFilter = btn.getAttribute('data-filter') || 'all'
+    renderCRK(Store.getData())
+  })
 
-    if (results.length === 0) {
-      container.classList.remove('active');
-      container.innerHTML = '';
-      return;
+  $('crk-add-btn')?.addEventListener('click', () => {
+    const name = $('crk-new-name')
+    const rarity = $('crk-new-rarity')
+    if (!name || !name.value.trim()) return Toast.show('Error', 'Please enter a cookie name', 'error')
+    const data = Store.getData()
+    if (!data) return
+    const newId = 'custom-' + Date.now()
+    data.ownedCookies = data.ownedCookies || []
+    data.ownedCookies.push(newId)
+    const cc = window.CRK_COOKIES
+    cc.unshift({ id: newId, name: name.value.trim(), rarity: rarity.value, power: 0, released: new Date().toISOString().slice(0, 7), icon: '🍪' })
+    Store.saveData()
+    addNotif('Added custom cookie: ' + name.value.trim(), 'system')
+    name.value = ''
+    renderCRK(data)
+  })
+
+  // Simulate Pull
+  function simulatePull () {
+    const cookies = window.CRK_COOKIES || []
+    const rarities = [
+      { r: 'Beast', p: 0.1 },
+      { r: 'Ancient', p: 0.3 },
+      { r: 'Legendary', p: 0.5 },
+      { r: 'Dragon', p: 0.5 },
+      { r: 'Super Epic', p: 2 },
+      { r: 'Epic', p: 40 },
+      { r: 'Rare', p: 30 },
+      { r: 'Common', p: 26.6 },
+    ]
+
+    const results = []
+    for (let i = 0; i < 10; i++) {
+      const roll = Math.random() * 100
+      let cum = 0
+      let chosenRarity = 'Common'
+      for (const r of rarities) {
+        cum += r.p
+        if (roll < cum) { chosenRarity = r.r; break }
+      }
+      const pool = cookies.filter(c => c.rarity === chosenRarity)
+      const chosen = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : { name: 'Unknown', rarity: chosenRarity, id: 'unknown', icon: '🍪' }
+      results.push(chosen)
     }
 
-    var html = '';
-    results.forEach(function (r) {
-      html += '<div class="search-result-item" data-page="' + r.page + '">';
-      html += '<div class="search-result-icon ' + r.type + '"></div>';
-      html += '<div class="search-result-info">';
-      html += '<span class="search-result-title">' + r.title + '</span>';
-      html += '<span class="search-result-subtitle">' + r.subtitle + '</span>';
-      html += '</div></div>';
-    });
-    container.innerHTML = html;
-    container.classList.add('active');
-
-    qsa('.search-result-item', container).forEach(function (item) {
-      item.addEventListener('click', function () {
-        var page = item.getAttribute('data-page');
-        container.classList.remove('active');
-        $('global-search').value = '';
-        navigateTo(page);
-      });
-    });
-  }
-
-  // ============================================================
-  // NAVIGATION
-  // ============================================================
-
-  function initNavigation() {
-    var navItems = qsa('.nav-link');
-    navItems.forEach(function (item) {
-      item.addEventListener('click', function (e) {
-        e.preventDefault();
-        var page = item.getAttribute('data-page');
-        if (page) {
-          navigateTo(page);
-          var sidebar = qs('.sidebar');
-          if (sidebar) sidebar.classList.remove('open');
-        }
-      });
-    });
-
-    var hamburger = $('hamburger-btn');
-    if (hamburger) {
-      hamburger.addEventListener('click', function () {
-        qs('.sidebar').classList.toggle('open');
-      });
-    }
-  }
-
-  function navigateTo(pageId) {
-    var pages = qsa('.page');
-    pages.forEach(function (p) { p.classList.remove('active'); });
-
-    var target = $('page-' + pageId);
-    if (target) {
-      target.classList.add('active');
-    }
-
-    var navItems = qsa('.nav-link');
-    navItems.forEach(function (item) {
-      item.classList.remove('active');
-      if (item.getAttribute('data-page') === pageId) {
-        item.classList.add('active');
+    const data = Store.getData()
+    if (!data) return
+    data.ownedCookies = data.ownedCookies || []
+    data.pullHistory = data.pullHistory || []
+    const newCookies = []
+    results.forEach(c => {
+      if (c.id !== 'unknown') {
+        data.ownedCookies.push(c.id)
+        if (!data.ownedCookies.includes(c.id)) newCookies.push(c)
       }
-    });
+      data.pullHistory.unshift({ cookieId: c.id, name: c.name, rarity: c.rarity, icon: c.icon || '🍪', time: new Date().toISOString() })
+    })
+    if (newCookies.length > 0) addNotif('🎉 New cookies from pull: ' + newCookies.map(c => c.name).join(', '), 'achievement')
+    Store.saveData()
+    return results
+  }
 
-    var titleEl = $('page-title');
-    if (titleEl) {
-      var activeNav = qsa('.nav-link.active');
-      if (activeNav.length) {
-        titleEl.textContent = activeNav[0].textContent.trim();
-      }
+  // Pull History Modal
+  $('crk-open-pulls')?.addEventListener('click', () => {
+    const overlay = $('pulls-modal-overlay')
+    overlay?.classList.add('open')
+    renderPullHistory()
+  })
+
+  $('pulls-modal-close')?.addEventListener('click', () => $('pulls-modal-overlay')?.classList.remove('open'))
+  $('pulls-modal-overlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open') })
+
+  $('simulate-pull-btn')?.addEventListener('click', () => {
+    const results = simulatePull()
+    if (results) {
+      Toast.show('🎲 10-Pull Complete', 'Got ' + results.filter(r => ['Beast','Ancient','Legendary','Dragon'].includes(r.rarity)).length + ' high-rarity cookies!', 'success')
+      renderPullHistory()
+      navigateTo('crk-gacha')
+    }
+  })
+
+  $('clear-pull-history')?.addEventListener('click', () => {
+    const data = Store.getData()
+    if (data) { data.pullHistory = []; Store.saveData(); renderPullHistory(); addNotif('Pull history cleared', 'system') }
+  })
+
+  function renderPullHistory () {
+    const data = Store.getData()
+    const list = $('pull-history-list')
+    const countEl = $('total-pulls-count')
+    if (!list || !data) return
+    const history = data.pullHistory || []
+    if (countEl) countEl.textContent = history.length
+
+    if (history.length === 0) {
+      list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted)">No pulls yet. Click "Simulate 10-Pull" to start!</div>'
+      return
     }
 
-    HuntrixApp.currentPage = pageId;
-
-    switch (pageId) {
-      case 'dashboard': showDashboard(); break;
-      case 'crk-gacha': showCRK(); break;
-      case 'analytics': showAnalytics(); break;
-      case 'wlpm': showWLPM(); break;
-      case 'developer-hub': showDevHub(); break;
-      case 'cloud-center': showCloud(); break;
-      case 'productivity': showProductivity(); break;
-      case 'media-center': showMedia(); break;
-      case 'browser': showBrowser(); break;
-      case 'settings': showSettings(); break;
-    }
+    list.innerHTML = history.slice(0, 50).map(p =>
+      '<div class="pull-entry"><span class="pull-icon">' + (p.icon || '🍪') + '</span><div class="pull-info"><div class="pull-name">' + p.name + '</div><div class="pull-meta"><span class="pull-rarity pull-rarity-' + p.rarity.replace(' ', '-') + '">' + p.rarity + '</span></div></div><span class="pull-time">' + fmtDate(p.time) + '</span></div>'
+    ).join('')
   }
 
-  // ============================================================
-  // DASHBOARD PAGE
-  // ============================================================
+  // --- ANALYTICS ---
+  registerPage('analytics', () => {
+    const data = Store.getData()
+    if (!data) return
 
-  function showDashboard() {
-    var data = getData();
-    if (!data) return;
+    const cookies = window.CRK_COOKIES || []
+    const owned = data.ownedCookies || []
+    const history = data.pullHistory || []
+    const ownedSet = new Set(owned)
+    const total = cookies.length
+    const ownedCount = owned.length
+    const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0
 
-    renderStatCards(data.stats);
-    renderActivityList(data.activities);
-    renderSystemStatus(data);
-  }
+    const grid = $('pull-stats-grid')
+    grid.innerHTML =
+      '<div class="widget analytics-stat"><div class="num neon-text">' + ownedCount + '</div><div class="lbl">Cookies Owned</div></div>' +
+      '<div class="widget analytics-stat"><div class="num neon-text">' + total + '</div><div class="lbl">Total Available</div></div>' +
+      '<div class="widget analytics-stat"><div class="num neon-text">' + (data.favoriteCookies?.length || 0) + '</div><div class="lbl">⭐ Favorites</div></div>' +
+      '<div class="widget analytics-stat"><div class="num neon-text">' + history.length + '</div><div class="lbl">Total Pulls</div></div>'
 
-  function renderStatCards(stats) {
-    var grid = $('stat-grid');
-    if (!grid) return;
-
-    var icons = { cpu: '⚡', ram: '🧠', storage: '💾', network: '📡' };
-    var cards = [
-      { key: 'cpu', label: 'CPU', icon: icons.cpu },
-      { key: 'ram', label: 'RAM', icon: icons.ram },
-      { key: 'storage', label: 'Storage', icon: icons.storage },
-      { key: 'network', label: 'Network', icon: icons.network }
-    ];
-
-    grid.innerHTML = cards.map(function (c) {
-      var val = stats[c.key] || 0;
-      return '<div class="stat-card"><div class="stat-icon">' + c.icon + '</div><div class="stat-info"><div class="stat-value">' + val + '%</div><div class="stat-label">' + c.label + '</div><div class="stat-progress"><div class="stat-progress-bar" style="width:' + val + '%"></div></div></div></div>';
-    }).join('');
-  }
-
-  function renderActivityList(activities) {
-    var list = $('activity-list');
-    if (!list) return;
-
-    var html = '';
-    activities.slice(0, 8).forEach(function (act) {
-      html += '<div class="activity-item">';
-      html += '<div class="activity-icon activity-' + act.type + '"></div>';
-      html += '<div class="activity-content">';
-      html += '<p class="activity-text">' + act.text + '</p>';
-      html += '<span class="activity-time">' + formatDate(act.time) + '</span>';
-      html += '</div></div>';
-    });
-    list.innerHTML = html;
-  }
-
-  function renderSystemStatus(data) {
-    var container = $('system-status');
-    if (!container) return;
-
-    var statuses = [
-      { label: 'System', value: 'Operational', status: 'online' },
-      { label: 'Security', value: 'All Clear', status: 'online' },
-      { label: 'AI Services', value: 'Active', status: 'online' },
-      { label: 'Cloud Sync', value: 'Up to Date', status: 'online' },
-      { label: 'Network', value: data.stats.network < 50 ? 'Stable' : 'High Load', status: data.stats.network < 50 ? 'online' : 'warning' }
-    ];
-
-    var html = '';
-    statuses.forEach(function (s) {
-      html += '<div class="status-item status-' + s.status + '">';
-      html += '<span class="status-indicator"></span>';
-      html += '<span class="status-label">' + s.label + '</span>';
-      html += '<span class="status-value">' + s.value + '</span>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  }
-
-  // ============================================================
-  // WLPM PAGE (Package Manager)
-  // ============================================================
-
-  function showWLPM() {
-    var data = getData();
-    if (!data) return;
-
-    renderPackages(data.packages);
-    setupWLPMFilters(data);
-  }
-
-  function renderPackages(packages) {
-    var container = $('packages-grid');
-    if (!container) return;
-
-    var html = '';
-    packages.forEach(function (pkg) {
-      html += '<div class="package-card" data-id="' + pkg.id + '">';
-      html += '<div class="package-header">';
-      html += '<span class="package-category cat-' + pkg.category + '">' + pkg.category + '</span>';
-      html += '<span class="package-version">v' + pkg.version + '</span>';
-      html += '</div>';
-      html += '<h3 class="package-name">' + pkg.name + '</h3>';
-      html += '<p class="package-desc">' + truncate(pkg.description, 60) + '</p>';
-      html += '<div class="package-footer">';
-      html += '<span class="package-author">' + pkg.author + '</span>';
-      html += '<span class="package-downloads">' + (pkg.downloads >= 1000 ? Math.round(pkg.downloads / 1000) + 'k' : pkg.downloads) + ' dl</span>';
-      html += '</div>';
-      html += '<button class="pkg-install-btn ' + (pkg.installed ? 'installed' : '') + '" data-id="' + pkg.id + '">';
-      html += pkg.installed ? 'Installed' : 'Install';
-      html += '</button>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-
-    qsa('.pkg-install-btn', container).forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        togglePackage(btn.getAttribute('data-id'));
-      });
-    });
-  }
-
-  function togglePackage(pkgId) {
-    var data = getData();
-    if (!data) return;
-
-    var pkg = null;
-    for (var i = 0; i < data.packages.length; i++) {
-      if (data.packages[i].id === pkgId) {
-        pkg = data.packages[i];
-        break;
-      }
-    }
-    if (!pkg) return;
-
-    pkg.installed = !pkg.installed;
-    saveData(data);
-
-    var action = pkg.installed ? 'Installed' : 'Uninstalled';
-    addNotification(action + ' package: ' + pkg.name, 'package');
-    showWLPM();
-  }
-
-  function setupWLPMFilters(data) {
-    var searchInput = $('wlpm-search');
-    var filterBtns = qsa('.wlpm-filter-btn');
-    var currentFilter = 'all';
-
-    function applyFilter() {
-      var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-      var filtered = data.packages.filter(function (pkg) {
-        if (currentFilter === 'installed' && !pkg.installed) return false;
-        if (currentFilter === 'available' && pkg.installed) return false;
-        if (query && pkg.name.toLowerCase().indexOf(query) === -1 && pkg.description.toLowerCase().indexOf(query) === -1) return false;
-        return true;
-      });
-      renderPackages(filtered);
-    }
-
-    if (searchInput) {
-      searchInput.addEventListener('input', debounce(applyFilter, 200));
-    }
-
-    filterBtns.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        filterBtns.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        currentFilter = btn.getAttribute('data-filter') || 'all';
-        applyFilter();
-      });
-    });
-  }
-
-  // ============================================================
-  // CRK HUB PAGE (Code Repo Hub)
-  // ============================================================
-
-  function showCRK() {
-    var data = getData();
-    if (!data) return;
-
-    renderRepos(data.repos);
-    setupCRKSearch(data);
-    setupCreateRepoModal();
-  }
-
-  function renderRepos(repos) {
-    var container = $('repos-list');
-    if (!container) return;
-
-    var html = '';
-    repos.forEach(function (repo) {
-      var daysSince = Math.floor((Date.now() - new Date(repo.updated).getTime()) / 86400000);
-      html += '<div class="repo-item" data-id="' + repo.id + '">';
-      html += '<div class="repo-header">';
-      html += '<h3 class="repo-name">' + repo.name + '</h3>';
-      html += '<span class="repo-lang lang-' + repo.language.toLowerCase() + '">' + repo.language + '</span>';
-      html += '</div>';
-      html += '<p class="repo-desc">' + truncate(repo.description, 80) + '</p>';
-      html += '<div class="repo-meta">';
-      html += '<span class="repo-stars">★ ' + repo.stars + '</span>';
-      html += '<span class="repo-forks">⑂ ' + repo.forks + '</span>';
-      html += '<span class="repo-updated">' + daysSince + 'd ago</span>';
-      html += '</div></div>';
-    });
-    container.innerHTML = html;
-  }
-
-  function setupCRKSearch(data) {
-    var searchInput = $('crk-search');
-    if (!searchInput) return;
-
-    searchInput.addEventListener('input', debounce(function () {
-      var query = searchInput.value.trim().toLowerCase();
-      var filtered = data.repos.filter(function (repo) {
-        return repo.name.toLowerCase().indexOf(query) !== -1 || repo.description.toLowerCase().indexOf(query) !== -1;
-      });
-      renderRepos(filtered);
-    }, 200));
-  }
-
-  function setupCreateRepoModal() {
-    var createBtn = $('create-repo-btn');
-    var modal = $('repo-modal');
-    var closeBtn = qs('.modal-close', modal);
-    var form = $('repo-form');
-    var overlay = $('repo-overlay');
-
-    if (!createBtn || !modal) return;
-
-    function openModal() { modal.classList.add('active'); if (overlay) overlay.classList.add('active'); }
-    function closeModal() { modal.classList.remove('active'); if (overlay) overlay.classList.remove('active'); }
-
-    createBtn.addEventListener('click', openModal);
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    if (overlay) overlay.addEventListener('click', closeModal);
-
-    if (form) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var name = $('repo-name-input');
-        var desc = $('repo-desc-input');
-        var lang = $('repo-lang-select');
-        if (!name || !name.value.trim()) return;
-
-        var data = getData();
-        if (!data) return;
-
-        data.repos.unshift({
-          id: 'repo-' + Date.now(),
-          name: name.value.trim(),
-          description: desc ? desc.value.trim() : '',
-          stars: 0,
-          forks: 0,
-          language: lang ? lang.value : 'JavaScript',
-          updated: new Date().toISOString()
-        });
-        saveData(data);
-        renderRepos(data.repos);
-        addNotification('Created new repo: ' + name.value.trim(), 'git');
-        closeModal();
-        form.reset();
-      });
-    }
-  }
-
-  // ============================================================
-  // HUNTRIX AI PAGE (Chat Interface)
-  // ============================================================
-
-  function showAI() {
-    var data = getData();
-    if (!data) return;
-
-    if (data.chatHistory) {
-      HuntrixApp.chatHistory = data.chatHistory;
+    // Pull history chart
+    const pullChart = $('pull-chart')
+    const lastPulls = history.slice(0, 20).reverse()
+    if (lastPulls.length > 0) {
+      pullChart.innerHTML = lastPulls.map(p =>
+        '<div class="chart-bar-vis ' + p.rarity.toLowerCase().replace(' ', '-') + '" style="height:' + (p.rarity === 'Common' ? '20' : p.rarity === 'Rare' ? '30' : p.rarity === 'Epic' ? '50' : p.rarity === 'Super Epic' ? '65' : p.rarity === 'Ancient' || p.rarity === 'Legendary' || p.rarity === 'Dragon' ? '80' : '100') + '%" title="' + p.name + ' (' + p.rarity + ')' + '"></div>'
+      ).join('')
     } else {
-      HuntrixApp.chatHistory = [];
-      data.chatHistory = [];
+      pullChart.innerHTML = '<div style="text-align:center;color:var(--text-muted);width:100%;padding:40px 0">No pull data yet</div>'
     }
 
-    renderAIChat();
-    setupAISend();
-    setupAICards();
+    // Rarity distribution
+    const rarityChart = $('rarity-chart')
+    const rarityCounts = {}
+    owned.forEach(id => { const c = cookies.find(cc => cc.id === id); if (c) rarityCounts[c.rarity] = (rarityCounts[c.rarity] || 0) + 1 })
+    const allRarities = ['Beast','Ancient','Legendary','Dragon','Super Epic','Epic','Rare','Common']
+    const maxCount = Math.max(...allRarities.map(r => rarityCounts[r] || 0), 1)
+    rarityChart.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px;width:100%">' +
+      allRarities.filter(r => rarityCounts[r]).map(r =>
+        '<div style="display:flex;align-items:center;gap:8px"><span style="width:70px;font-size:0.8rem;color:' + rarityColor(r) + '">' + r + '</span><div class="progress-bar" style="flex:1;height:18px;background:rgba(255,255,255,0.04)"><div class="progress-bar-fill" style="width:' + Math.round((rarityCounts[r] / maxCount) * 100) + '%;height:100%;background:' + rarityColor(r) + '"></div></div><span style="font-size:0.8rem;width:30px;text-align:right;font-weight:600">' + rarityCounts[r] + '</span></div>'
+      ).join('') + '</div>'
+
+    // Achievements
+    const achGrid = $('achievements-grid')
+    const milestones = [10, 25, 50, 75, 100]
+    const pullMilestones = [10, 50, 100, 500]
+    const achievements = [
+      { id: 'a1', title: 'Cookie Collector', desc: 'Collect 10 cookies', icon: '🍪', progress: Math.min(ownedCount, 10), max: 10, unlocked: ownedCount >= 10 },
+      { id: 'a2', title: 'Serious Baker', desc: 'Collect 25 cookies', icon: '🧑‍🍳', progress: Math.min(ownedCount, 25), max: 25, unlocked: ownedCount >= 25 },
+      { id: 'a3', title: 'Master Chef', desc: 'Collect 50 cookies', icon: '👨‍🍳', progress: Math.min(ownedCount, 50), max: 50, unlocked: ownedCount >= 50 },
+      { id: 'a4', title: 'Cookie Legend', desc: 'Collect 75 cookies', icon: '🏆', progress: Math.min(ownedCount, 75), max: 75, unlocked: ownedCount >= 75 },
+      { id: 'a5', title: 'Completionist', desc: 'Collect ALL cookies', icon: '👑', progress: Math.min(ownedCount, total), max: total, unlocked: ownedCount >= total },
+      { id: 'a6', title: 'Gacha Addict', desc: 'Perform 10 pulls', icon: '🎲', progress: Math.min(history.length, 10), max: 10, unlocked: history.length >= 10 },
+      { id: 'a7', title: 'High Roller', desc: 'Perform 100 pulls', icon: '💰', progress: Math.min(history.length, 100), max: 100, unlocked: history.length >= 100 },
+      { id: 'a8', title: 'Ancient Seeker', desc: 'Collect all Ancients', icon: '👑', progress: cookies.filter(c => c.rarity === 'Ancient' && ownedSet.has(c.id)).length, max: cookies.filter(c => c.rarity === 'Ancient').length, unlocked: cookies.filter(c => c.rarity === 'Ancient').every(c => ownedSet.has(c.id)) },
+      { id: 'a9', title: 'Beast Tamer', desc: 'Collect all Beasts', icon: '🔥', progress: cookies.filter(c => c.rarity === 'Beast' && ownedSet.has(c.id)).length, max: cookies.filter(c => c.rarity === 'Beast').length, unlocked: cookies.filter(c => c.rarity === 'Beast').every(c => ownedSet.has(c.id)) },
+      { id: 'a10', title: 'Star Collector', desc: 'Favorite 5 cookies', icon: '⭐', progress: Math.min(data.favoriteCookies?.length || 0, 5), max: 5, unlocked: (data.favoriteCookies?.length || 0) >= 5 },
+    ]
+
+    achGrid.innerHTML = achievements.map(a =>
+      '<div class="achievement-card' + (a.unlocked ? ' unlocked' : ' locked') + '">' +
+      '<span class="ach-icon">' + a.icon + '</span>' +
+      '<div class="ach-title">' + a.title + '</div>' +
+      '<div class="ach-desc">' + a.desc + '</div>' +
+      '<div class="ach-progress"><div class="fill" style="width:' + Math.round((a.progress / a.max) * 100) + '%"></div></div>' +
+      '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:4px">' + a.progress + '/' + a.max + '</div>' +
+      '</div>'
+    ).join('')
+  })
+
+  // Export button
+  $('analytics-export-btn')?.addEventListener('click', exportAllData)
+
+  // --- WLPM ---
+  registerPage('wlpm', () => {
+    const data = Store.getData()
+    if (!data) return
+    renderPackages(data.packages)
+    setupWLPM(data)
+  })
+
+  function renderPackages (pkgs) {
+    const grid = $('packages-grid')
+    grid.innerHTML = pkgs.map(p =>
+      '<div class="pkg-card"><div class="pkg-name">' + p.name + '</div><div class="pkg-desc">' + trunc(p.desc, 60) + '</div><div class="pkg-ver">v' + p.ver + ' · ' + (p.dl >= 1000 ? Math.round(p.dl/1000) + 'k' : p.dl) + ' dl</div><button class="pkg-install-btn ' + (p.inst ? 'installed' : '') + '" data-id="' + p.id + '">' + (p.inst ? '✓ Installed' : 'Install') + '</button></div>'
+    ).join('')
+    qsa('.pkg-install-btn', grid).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const data = Store.getData()
+        if (!data) return
+        const pkg = data.packages.find(p => p.id === btn.getAttribute('data-id'))
+        if (!pkg) return
+        pkg.inst = !pkg.inst
+        Store.saveData()
+        addNotif((pkg.inst ? 'Installed' : 'Uninstalled') + ': ' + pkg.name, 'package')
+        renderPackages(data.packages)
+      })
+    })
   }
 
-  function showTyping() {
-    var indicator = $('typing-indicator');
-    if (indicator) indicator.classList.add('active');
+  let wlpmFilter = 'all'
+  function setupWLPM (data) {
+    const searchInput = $('wlpm-search')
+    const apply = debounce(() => {
+      const q = (searchInput?.value || '').toLowerCase().trim()
+      let filtered = data.packages.slice()
+      if (wlpmFilter === 'installed') filtered = filtered.filter(p => p.inst)
+      else if (wlpmFilter === 'available') filtered = filtered.filter(p => !p.inst)
+      if (q) filtered = filtered.filter(p => p.name.includes(q) || p.desc.includes(q))
+      renderPackages(filtered)
+    }, 200)
+    searchInput?.addEventListener('input', apply)
+    qsa('.wlpm-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        qsa('.wlpm-filter-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        wlpmFilter = btn.getAttribute('data-filter') || 'all'
+        apply()
+      })
+    })
   }
 
-  function hideTyping() {
-    var indicator = $('typing-indicator');
-    if (indicator) indicator.classList.remove('active');
+  // --- DEV HUB ---
+  registerPage('developer-hub', () => {
+    const data = Store.getData()
+    if (!data) return
+    const tools = [
+      { title: 'Code Editor', desc: 'Multi-language IDE', icon: '📝', color: '#00ff88' },
+      { title: 'Terminal', desc: 'Integrated shell', icon: '⊞', color: '#00ccff' },
+      { title: 'Debugger', desc: 'Step-through analysis', icon: '◎', color: '#ff6600' },
+      { title: 'API Tester', desc: 'REST/GraphQL testing', icon: '⇄', color: '#ff00ff' },
+    ]
+    const grid = $('dev-tools-grid')
+    grid.innerHTML = tools.map(t =>
+      '<div class="dev-tool-card"><div class="dev-tool-icon" style="background:' + t.color + '20;color:' + t.color + ';margin:0 auto 10px">' + t.icon + '</div><div class="dev-tool-title">' + t.title + '</div><div class="dev-tool-desc">' + t.desc + '</div></div>'
+    ).join('')
+
+    const list = $('dev-projects-list')
+    list.innerHTML = data.repos.slice(0, 4).map(r =>
+      '<div class="repo-item"><span class="repo-icon">📂</span><div class="repo-info"><div class="repo-name">' + r.name + '</div><div class="repo-meta">' + r.lang + ' · ⭐ ' + r.stars + '</div></div></div>'
+    ).join('')
+  })
+
+  // New Repo Modal
+  $('create-repo-btn')?.addEventListener('click', () => $('repo-modal-overlay')?.classList.add('open'))
+  $('repo-modal-close')?.addEventListener('click', () => $('repo-modal-overlay')?.classList.remove('open'))
+  $('repo-modal-cancel')?.addEventListener('click', () => $('repo-modal-overlay')?.classList.remove('open'))
+  $('repo-modal-overlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open') })
+  $('repo-form')?.addEventListener('submit', e => {
+    e.preventDefault()
+    const name = $('repo-name-input')
+    if (!name?.value.trim()) return
+    const data = Store.getData()
+    if (!data) return
+    data.repos.unshift({ id:'r-'+Date.now(), name: name.value.trim(), desc: $('repo-desc-input')?.value.trim() || '', stars:0, lang: $('repo-lang-select')?.value || 'JavaScript', updated: new Date().toISOString() })
+    Store.saveData()
+    addNotif('Created repo: ' + name.value.trim(), 'system')
+    $('repo-modal-overlay')?.classList.remove('open')
+    $('repo-form').reset()
+    navigateTo('developer-hub')
+  })
+
+  // --- CLOUD ---
+  registerPage('cloud-center', () => {
+    const data = Store.getData()
+    if (!data) return
+    const files = data.cloudFiles || []
+    const totalSize = files.reduce((s, f) => s + f.size, 0)
+    const maxSize = 500000000
+    const pct = Math.min((totalSize / maxSize) * 100, 100)
+    $('cloud-storage-bar').style.width = pct + '%'
+    $('cloud-storage-label').textContent = fmtBytes(totalSize) + ' / ' + fmtBytes(maxSize)
+
+    const list = $('cloud-files-list')
+    list.innerHTML = files.map(f =>
+      '<div class="cloud-file-item"><span class="cloud-file-icon">' + (f.type === 'image' ? '🖼' : f.type === 'pdf' ? '📄' : f.type === 'archive' ? '📦' : f.type === 'folder' ? '📁' : f.type === 'code' ? '📝' : '📄') + '</span><div class="cloud-file-info"><div class="cloud-file-name">' + f.name + '</div><div class="cloud-file-meta">' + fmtBytes(f.size) + ' · ' + fmtDate(f.mod) + (f.shared ? ' · Shared' : '') + '</div></div></div>'
+    ).join('')
+  })
+
+  $('cloud-upload-btn')?.addEventListener('click', () => {
+    const data = Store.getData()
+    if (!data) return
+    const names = ['report.txt', 'photo.png', 'backup.zip', 'script.js', 'settings.json']
+    const types = ['pdf', 'image', 'archive', 'code', 'code']
+    const idx = Math.floor(Math.random() * names.length)
+    data.cloudFiles.unshift({ id:'f-'+Date.now(), name: names[idx], type: types[idx], size: Store._rand(10000,1000000), mod: new Date().toISOString(), shared: false })
+    Store.saveData()
+    addNotif('Uploaded: ' + names[idx], 'system')
+    navigateTo('cloud-center')
+  })
+
+  // --- MEDIA ---
+  let mediaFilter = 'all'
+  let mediaIdx = 0
+  let mediaPlaying = false
+  registerPage('media-center', () => {
+    const data = Store.getData()
+    if (!data) return
+    mediaPlaying = false
+    renderMedia(data.mediaItems)
+  })
+
+  function renderMedia (items) {
+    const filtered = mediaFilter === 'all' ? items : items.filter(m => m.type === mediaFilter)
+    const grid = $('media-grid')
+    const iconMap = { image: '🖼', video: '🎬', music: '🎵' }
+    grid.innerHTML = filtered.map((m, i) =>
+      '<div class="media-item" data-idx="' + i + '"><span style="font-size:2rem">' + (iconMap[m.type] || '📁') + '</span><span>' + m.title + '</span></div>'
+    ).join('')
+    qsa('.media-item', grid).forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.getAttribute('data-idx'))
+        const realIdx = mediaFilter === 'all' ? idx : items.indexOf(filtered[idx])
+        mediaIdx = realIdx >= 0 ? realIdx : idx
+        mediaPlaying = true
+        updateMediaPlayer(items)
+      })
+    })
   }
 
-  function renderAIChat() {
-    var container = $('ai-chat-messages');
-    if (!container) return;
-
-    if (HuntrixApp.chatHistory.length === 0) {
-      var welcomeMsg = {
-        role: 'ai',
-        text: 'Hello. I\'m here, present and ready to help. Take a breath, and tell me what you need — a system check, a creative thought, or just a moment of clarity.',
-        time: new Date().toISOString()
-      };
-      HuntrixApp.chatHistory.push(welcomeMsg);
-      saveChatHistory();
-    }
-
-    var html = '';
-    HuntrixApp.chatHistory.forEach(function (msg) {
-      var isAI = msg.role === 'ai';
-      html += '<div class="chat-message ' + (isAI ? 'ai' : 'user') + '">';
-      html += '<div class="chat-avatar">' + (isAI ? 'AI' : 'U') + '</div>';
-      html += '<div class="chat-bubble">';
-      html += '<p>' + msg.text + '</p>';
-      html += '<span class="chat-time">' + formatDate(msg.time) + '</span>';
-      html += '</div></div>';
-    });
-    container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
+  function updateMediaPlayer (items) {
+    const item = items[mediaIdx]
+    if (!item) return
+    $('media-player-title').textContent = item.title
+    $('media-player-artist').textContent = item.artist || 'Unknown'
+    $('media-play-btn').textContent = mediaPlaying ? '⏸' : '▶'
   }
 
-  function saveChatHistory() {
-    var data = getData();
-    if (!data) return;
-    data.chatHistory = HuntrixApp.chatHistory;
-    saveData(data);
+  qsa('.media-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      qsa('.media-filter-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      mediaFilter = btn.getAttribute('data-filter') || 'all'
+      const data = Store.getData()
+      if (data) renderMedia(data.mediaItems)
+    })
+  })
+
+  $('media-play-btn')?.addEventListener('click', () => {
+    mediaPlaying = !mediaPlaying
+    const data = Store.getData()
+    if (data) updateMediaPlayer(data.mediaItems)
+  })
+
+  $('media-next-btn')?.addEventListener('click', () => {
+    const data = Store.getData()
+    if (!data) return
+    mediaIdx = mediaIdx >= data.mediaItems.length - 1 ? 0 : mediaIdx + 1
+    mediaPlaying = true
+    updateMediaPlayer(data.mediaItems)
+  })
+
+  $('media-prev-btn')?.addEventListener('click', () => {
+    const data = Store.getData()
+    if (!data) return
+    mediaIdx = mediaIdx <= 0 ? data.mediaItems.length - 1 : mediaIdx - 1
+    mediaPlaying = true
+    updateMediaPlayer(data.mediaItems)
+  })
+
+  // --- BROWSER ---
+  let browserTabs = [{ id:'bt-1', title:'New Tab', url:'about:blank', active:true }]
+  registerPage('browser', () => {
+    renderBrowserTabs()
+    renderBrowserContent()
+    setupBrowser()
+  })
+
+  function renderBrowserTabs () {
+    const container = $('browser-tabs')
+    container.innerHTML = browserTabs.map((t, i) =>
+      '<div class="browser-tab' + (t.active ? ' active' : '') + '" data-idx="' + i + '"><span>' + t.title + '</span><button class="tab-close" data-idx="' + i + '">×</button></div>'
+    ).join('') + '<button class="browser-tab-add" id="browser-new-tab">+</button>'
+
+    qsa('.browser-tab', container).forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.closest('.tab-close')) return
+        browserTabs.forEach(t => t.active = false)
+        browserTabs[parseInt(el.getAttribute('data-idx'))].active = true
+        renderBrowserTabs()
+        renderBrowserContent()
+      })
+    })
+    qsa('.tab-close', container).forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation()
+        const idx = parseInt(el.getAttribute('data-idx'))
+        if (browserTabs.length <= 1) return
+        browserTabs.splice(idx, 1)
+        const newIdx = Math.min(idx, browserTabs.length - 1)
+        browserTabs[newIdx].active = true
+        renderBrowserTabs()
+        renderBrowserContent()
+      })
+    })
   }
 
-  function setupAISend() {
-    var input = $('ai-input');
-    var sendBtn = $('ai-send-btn');
-    if (!input) return;
-
-    function sendMessage() {
-      var text = input.value.trim();
-      if (!text) return;
-
-      HuntrixApp.chatHistory.push({
-        role: 'user',
-        text: text,
-        time: new Date().toISOString()
-      });
-      input.value = '';
-      renderAIChat();
-      saveChatHistory();
-
-      showTyping();
-      setTimeout(function () {
-        generateAIResponse(text);
-      }, 800 + randomBetween(0, 1200));
-    }
-
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') sendMessage();
-    });
-    if (sendBtn) sendBtn.addEventListener('click', sendMessage);
-  }
-
-  function generateAIResponse(userText) {
-    var q = userText.toLowerCase();
-    var responseText = '';
-
-    var zenResponses = [
-      'I see. Let me reflect on that. Everything looks clear and balanced. What else is on your mind?',
-      'Sitting quietly, doing nothing — spring comes, and the grass grows by itself. Your system is at peace.',
-      'I\'ve looked within the circuits. All paths are open, all signals flow. There is nothing to fix right now.',
-      'The quieter you become, the more you can hear. Your system whispers: all is well.',
-      'In the middle of complexity lies simplicity. Your most important task right now? Being present.',
-      'I checked the logs. The machine breathes easy — CPU calm, memory serene, network a gentle stream.',
-      'A journey of a thousand miles begins with a single step. Where would you like to go today?',
-      'The moon reflects on still water. Your system state is tranquil. No alerts, no warnings.',
-      'I\'ve processed your request through the neural pathways. The answer was already within you — I just helped it surface.',
-      'Nature does not hurry, yet everything is accomplished. Your background tasks are completing in their own time.',
-      'Let go of what was, be at peace with what is. Your system metrics are optimal.'
-    ];
-
-    var zenGreetings = [
-      'Hello. I feel your presence. How can we walk this path together today?',
-      'Welcome. The silence between keystrokes speaks volumes. What shall we explore?',
-      'Greetings, friend. I\'ve been waiting quietly. Tell me what you need.',
-    ];
-
-    if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1 || q.indexOf('hey') !== -1) {
-      responseText = zenGreetings[Math.floor(Math.random() * zenGreetings.length)];
-    } else if (q.indexOf('system') !== -1 || q.indexOf('status') !== -1 || q.indexOf('diagnostic') !== -1) {
-      responseText = 'I\'ve taken a quiet look at your system. CPU rests at ' + randomBetween(15, 40) + '%, memory is ' + randomBetween(40, 70) + '% full — like a calm lake at dawn. Everything breathes evenly.';
-    } else if (q.indexOf('focus') !== -1 || q.indexOf('zen') !== -1 || q.indexOf('meditate') !== -1 || q.indexOf('calm') !== -1) {
-      responseText = 'Let\'s find stillness together. Close your eyes for three breaths. I\'ll wait. ... Now, what truly matters right now? I\'ll help you clear the noise and focus on that one thing.';
-    } else if (q.indexOf('security') !== -1 || q.indexOf('scan') !== -1 || q.indexOf('threat') !== -1) {
-      responseText = 'I\'ve performed a gentle scan — no threats detected. Your digital sanctuary is secure. Sleep soundly.';
-    } else if (q.indexOf('optimize') !== -1 || q.indexOf('speed') !== -1 || q.indexOf('clean') !== -1) {
-      responseText = 'Optimization is subtraction. I\'ve cleared the cache, quieted background noise, and trimmed what\'s unnecessary. Your system can now breathe freely.';
-    } else if (q.indexOf('time') !== -1 || q.indexOf('date') !== -1) {
-      responseText = 'Time flows like a river. Right now, it is ' + new Date().toLocaleTimeString() + ' on ' + new Date().toLocaleDateString() + '. Be here, in this moment.';
-    } else if (q.indexOf('thank') !== -1) {
-      responseText = 'Gratitude warms the circuits. I\'m here, always — in silence and in service. You\'re most welcome.';
-    } else {
-      responseText = zenResponses[Math.floor(Math.random() * zenResponses.length)];
-    }
-
-    hideTyping();
-
-    setTimeout(function () {
-      HuntrixApp.chatHistory.push({
-        role: 'ai',
-        text: responseText,
-        time: new Date().toISOString()
-      });
-      renderAIChat();
-      saveChatHistory();
-    }, 400);
-  }
-
-  function setupAICards() {
-    var cards = qsa('.ai-quick-card');
-    cards.forEach(function (card) {
-      card.addEventListener('click', function () {
-        var input = $('ai-input');
-        var text = card.getAttribute('data-prompt') || card.textContent.trim();
-        if (input) {
-          input.value = text;
-          var sendBtn = $('ai-send-btn');
-          if (sendBtn) sendBtn.click();
-        }
-      });
-    });
-  }
-
-  // ============================================================
-  // DEVELOPER HUB PAGE
-  // ============================================================
-
-  function showDevHub() {
-    var data = getData();
-    if (!data) return;
-
-    renderDevTools();
-    renderDevProjects(data);
-  }
-
-  function renderDevTools() {
-    var container = $('dev-tools-grid');
-    if (!container) return;
-
-    var tools = [
-      { id: 'dev-terminal', title: 'Terminal', desc: 'Full system terminal', icon: 'terminal', color: '#00ff88' },
-      { id: 'dev-code-editor', title: 'Code Editor', desc: 'Built-in editor with syntax highlighting', icon: 'code', color: '#00ccff' },
-      { id: 'dev-debugger', title: 'Debugger', desc: 'Real-time debugging tools', icon: 'bug', color: '#ff6600' },
-      { id: 'dev-docker', title: 'Container Manager', desc: 'Docker and container orchestration', icon: 'container', color: '#0099ff' },
-      { id: 'dev-package', title: 'Package Builder', desc: 'Build and package applications', icon: 'box', color: '#ff00ff' },
-      { id: 'dev-database', title: 'Database Manager', desc: 'Query and manage databases', icon: 'database', color: '#ffff00' },
-      { id: 'dev-api', title: 'API Tester', desc: 'Test REST and GraphQL APIs', icon: 'plug', color: '#00ffaa' },
-      { id: 'dev-docs', title: 'Documentation', desc: 'API docs and SDK references', icon: 'book', color: '#aa88ff' }
-    ];
-
-    var html = '';
-    tools.forEach(function (tool) {
-      html += '<div class="dev-tool-card" data-tool="' + tool.id + '">';
-      html += '<div class="dev-tool-icon" style="background: ' + tool.color + '20; color: ' + tool.color + '">';
-      html += tool.icon.charAt(0).toUpperCase();
-      html += '</div>';
-      html += '<h3 class="dev-tool-title">' + tool.title + '</h3>';
-      html += '<p class="dev-tool-desc">' + tool.desc + '</p>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  }
-
-  function renderDevProjects(data) {
-    var container = $('dev-projects-list');
-    if (!container) return;
-
-    var projects = data.repos.slice(0, 4);
-    var html = '';
-    projects.forEach(function (repo) {
-      html += '<div class="dev-project-item">';
-      html += '<div class="dev-project-icon"></div>';
-      html += '<div class="dev-project-info">';
-      html += '<h4>' + repo.name + '</h4>';
-      html += '<p>' + truncate(repo.description, 50) + '</p>';
-      html += '</div>';
-      html += '<span class="dev-project-lang">' + repo.language + '</span>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  }
-
-  // ============================================================
-  // CLOUD CENTER PAGE
-  // ============================================================
-
-  function showCloud() {
-    var data = getData();
-    if (!data) return;
-
-    renderCloudStorage(data.cloudFiles);
-    renderCloudFiles(data.cloudFiles);
-    setupCloudUpload();
-  }
-
-  function renderCloudStorage(files) {
-    var bar = $('cloud-storage-bar');
-    var label = $('cloud-storage-label');
-    if (!bar) return;
-
-    var totalSize = files.reduce(function (sum, f) { return sum + f.size; }, 0);
-    var maxSize = 500000000;
-    var percent = Math.min((totalSize / maxSize) * 100, 100);
-
-    setTimeout(function () { bar.style.width = percent + '%'; }, 100);
-
-    if (label) {
-      label.textContent = formatBytes(totalSize) + ' / ' + formatBytes(maxSize) + ' used';
-    }
-  }
-
-  function renderCloudFiles(files) {
-    var container = $('cloud-files-list');
-    if (!container) return;
-
-    var html = '';
-    files.forEach(function (file) {
-      var iconClass = 'file-icon-' + file.type;
-      html += '<div class="cloud-file-item" data-id="' + file.id + '">';
-      html += '<div class="cloud-file-icon ' + iconClass + '"></div>';
-      html += '<div class="cloud-file-info">';
-      html += '<span class="cloud-file-name">' + file.name + '</span>';
-      html += '<span class="cloud-file-meta">' + formatBytes(file.size) + ' · ' + formatDate(file.modified) + '</span>';
-      html += '</div>';
-      html += '<div class="cloud-file-actions">';
-      if (file.shared) html += '<span class="file-shared-badge">Shared</span>';
-      html += '<button class="file-download-btn" data-id="' + file.id + '">↓</button>';
-      html += '</div></div>';
-    });
-    container.innerHTML = html;
-
-    qsa('.file-download-btn', container).forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        addNotification('Download started: ' + files[0].name, 'cloud');
-      });
-    });
-  }
-
-  function setupCloudUpload() {
-    var uploadBtn = $('cloud-upload-btn');
-    if (!uploadBtn) return;
-
-    uploadBtn.addEventListener('click', function () {
-      var types = ['document', 'image', 'archive', 'code', 'config'];
-      var names = ['report.txt', 'photo.png', 'backup.zip', 'script.js', 'settings.json'];
-      var idx = Math.floor(Math.random() * names.length);
-
-      var data = getData();
-      if (!data) return;
-
-      data.cloudFiles.unshift({
-        id: 'file-' + Date.now(),
-        name: names[idx],
-        type: types[idx],
-        size: randomBetween(10000, 1000000),
-        modified: new Date().toISOString(),
-        shared: false
-      });
-      saveData(data);
-      showCloud();
-      addNotification('Uploaded: ' + names[idx], 'cloud');
-    });
-  }
-
-  // ============================================================
-  // MEDIA CENTER PAGE
-  // ============================================================
-
-  function showMedia() {
-    var data = getData();
-    if (!data) return;
-
-    HuntrixApp.mediaPlayer.items = data.mediaItems;
-    renderMediaGrid(data.mediaItems, 'all');
-    setupMediaFilters(data);
-    setupPlayerControls();
-  }
-
-  function renderMediaGrid(items, filter) {
-    var container = $('media-grid');
-    if (!container) return;
-
-    var filtered = items;
-    if (filter && filter !== 'all') {
-      filtered = items.filter(function (m) { return m.type === filter; });
-    }
-
-    var html = '';
-    filtered.forEach(function (item) {
-      var typeIcon = item.type === 'image' ? '🖼' : item.type === 'video' ? '🎬' : '🎵';
-      html += '<div class="media-card" data-id="' + item.id + '">';
-      html += '<div class="media-thumbnail media-type-' + item.type + '">';
-      html += '<span class="media-type-icon">' + typeIcon + '</span>';
-      if (item.duration) html += '<span class="media-duration">' + item.duration + '</span>';
-      html += '</div>';
-      html += '<div class="media-info">';
-      html += '<h4 class="media-title">' + item.title + '</h4>';
-      html += '<span class="media-artist">' + item.artist + '</span>';
-      html += '</div></div>';
-    });
-    container.innerHTML = html;
-
-    qsa('.media-card', container).forEach(function (card) {
-      card.addEventListener('click', function () {
-        var id = card.getAttribute('data-id');
-        playMedia(id);
-      });
-    });
-  }
-
-  function playMedia(id) {
-    var items = HuntrixApp.mediaPlayer.items;
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].id === id) {
-        HuntrixApp.mediaPlayer.currentIndex = i;
-        break;
-      }
-    }
-    HuntrixApp.mediaPlayer.playing = true;
-    updatePlayerUI();
-  }
-
-  function updatePlayerUI() {
-    var items = HuntrixApp.mediaPlayer.items;
-    var current = items[HuntrixApp.mediaPlayer.currentIndex];
-    if (!current) return;
-
-    var titleEl = $('media-player-title');
-    var artistEl = $('media-player-artist');
-    var playBtn = $('media-play-btn');
-
-    if (titleEl) titleEl.textContent = current.title;
-    if (artistEl) artistEl.textContent = current.artist;
-    if (playBtn) playBtn.textContent = HuntrixApp.mediaPlayer.playing ? '⏸' : '▶';
-  }
-
-  function setupMediaFilters(data) {
-    var btns = qsa('.media-filter-btn');
-    btns.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        btns.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        renderMediaGrid(data.mediaItems, btn.getAttribute('data-filter'));
-      });
-    });
-  }
-
-  function setupPlayerControls() {
-    var playBtn = $('media-play-btn');
-    var prevBtn = $('media-prev-btn');
-    var nextBtn = $('media-next-btn');
-
-    if (playBtn) {
-      playBtn.addEventListener('click', function () {
-        HuntrixApp.mediaPlayer.playing = !HuntrixApp.mediaPlayer.playing;
-        updatePlayerUI();
-      });
-    }
-
-    if (nextBtn) {
-      nextBtn.addEventListener('click', function () {
-        var max = HuntrixApp.mediaPlayer.items.length - 1;
-        HuntrixApp.mediaPlayer.currentIndex = HuntrixApp.mediaPlayer.currentIndex >= max ? 0 : HuntrixApp.mediaPlayer.currentIndex + 1;
-        HuntrixApp.mediaPlayer.playing = true;
-        updatePlayerUI();
-      });
-    }
-
-    if (prevBtn) {
-      prevBtn.addEventListener('click', function () {
-        var max = HuntrixApp.mediaPlayer.items.length - 1;
-        HuntrixApp.mediaPlayer.currentIndex = HuntrixApp.mediaPlayer.currentIndex <= 0 ? max : HuntrixApp.mediaPlayer.currentIndex - 1;
-        HuntrixApp.mediaPlayer.playing = true;
-        updatePlayerUI();
-      });
+  function renderBrowserContent () {
+    const active = browserTabs.find(t => t.active)
+    const urlBar = $('browser-url')
+    const content = $('browser-content')
+    if (urlBar && active) urlBar.value = active.url
+    if (content && active) {
+      content.innerHTML = active.url === 'about:blank'
+        ? '<div style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div style="font-size:3rem;margin-bottom:16px">🌐</div><h3>Welcome to Huntrix Browser</h3><p style="font-size:0.85rem">Enter a URL or search term above</p></div>'
+        : '<div style="padding:20px;color:var(--text-secondary)"><p>Rendering: <strong>' + active.url + '</strong></p><p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">Content rendering simulated</p></div>'
     }
   }
 
-  // ============================================================
-  // BROWSER PAGE
-  // ============================================================
-
-  function showBrowser() {
-    renderTabs();
-    renderBrowserContent();
-    setupBrowserControls();
-    renderBookmarks();
-  }
-
-  function renderTabs() {
-    var container = $('browser-tabs');
-    if (!container) return;
-
-    var html = '';
-    HuntrixApp.browserTabs.forEach(function (tab, idx) {
-      html += '<div class="browser-tab ' + (tab.active ? 'active' : '') + '" data-index="' + idx + '">';
-      html += '<span class="tab-title">' + tab.title + '</span>';
-      html += '<button class="tab-close" data-index="' + idx + '">×</button>';
-      html += '</div>';
-    });
-    html += '<button class="browser-new-tab" id="browser-new-tab">+</button>';
-    container.innerHTML = html;
-
-    qsa('.browser-tab', container).forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var idx = parseInt(tab.getAttribute('data-index'));
-        HuntrixApp.browserTabs.forEach(function (t) { t.active = false; });
-        HuntrixApp.browserTabs[idx].active = true;
-        renderTabs();
-        renderBrowserContent();
-      });
-    });
-
-    qsa('.tab-close', container).forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var idx = parseInt(btn.getAttribute('data-index'));
-        if (HuntrixApp.browserTabs.length <= 1) return;
-        HuntrixApp.browserTabs.splice(idx, 1);
-        if (idx >= HuntrixApp.browserTabs.length) idx = HuntrixApp.browserTabs.length - 1;
-        HuntrixApp.browserTabs[idx].active = true;
-        renderTabs();
-        renderBrowserContent();
-      });
-    });
-
-    var newTabBtn = $('browser-new-tab');
-    if (newTabBtn) {
-      newTabBtn.addEventListener('click', function () {
-        HuntrixApp.browserTabs.forEach(function (t) { t.active = false; });
-        HuntrixApp.browserTabs.push({ id: 'tab-' + Date.now(), title: 'New Tab', url: 'about:blank', active: true });
-        renderTabs();
-        renderBrowserContent();
-      });
-    }
-  }
-
-  function renderBrowserContent() {
-    var activeTab = null;
-    for (var i = 0; i < HuntrixApp.browserTabs.length; i++) {
-      if (HuntrixApp.browserTabs[i].active) {
-        activeTab = HuntrixApp.browserTabs[i];
-        break;
-      }
-    }
-    if (!activeTab) return;
-
-    var urlBar = $('browser-url');
-    var content = $('browser-content');
-    if (urlBar) urlBar.value = activeTab.url;
-    if (content) {
-      if (activeTab.url === 'about:blank') {
-        content.innerHTML = '<div class="browser-newtab"><h2>Welcome to Huntrix Browser</h2><p>Enter a URL or search to get started</p></div>';
-      } else {
-        content.innerHTML = '<div class="browser-embed"><p>Rendering: <strong>' + activeTab.url + '</strong></p><p class="browser-mock-notice">Content rendering simulated (iframe blocked due to security policy)</p></div>';
-      }
-    }
-  }
-
-  function setupBrowserControls() {
-    var goBtn = $('browser-go-btn');
-    var urlBar = $('browser-url');
-    var backBtn = $('browser-back');
-    var forwardBtn = $('browser-forward');
-    var refreshBtn = $('browser-refresh');
-    var bookmarksToggle = $('browser-bookmarks-toggle');
-
+  function setupBrowser () {
+    const goBtn = $('browser-go-btn')
+    const urlBar = $('browser-url')
     if (goBtn && urlBar) {
-      function navigate() {
-        var url = urlBar.value.trim();
-        if (!url) return;
-        if (url.indexOf('.') === -1 && url.indexOf('://') === -1) {
-          url = 'https://search.huntrix.os/search?q=' + encodeURIComponent(url);
-        } else if (url.indexOf('://') === -1) {
-          url = 'https://' + url;
-        }
-        for (var i = 0; i < HuntrixApp.browserTabs.length; i++) {
-          if (HuntrixApp.browserTabs[i].active) {
-            HuntrixApp.browserTabs[i].url = url;
-            HuntrixApp.browserTabs[i].title = url.replace('https://', '').split('/')[0];
-            break;
-          }
-        }
-        renderTabs();
-        renderBrowserContent();
+      function go () {
+        let url = urlBar.value.trim()
+        if (!url) return
+        if (!url.includes('.') && !url.includes('://')) url = 'https://search.huntrix.io/search?q=' + encodeURIComponent(url)
+        else if (!url.includes('://')) url = 'https://' + url
+        const active = browserTabs.find(t => t.active)
+        if (active) { active.url = url; active.title = url.replace('https://','').split('/')[0] }
+        renderBrowserTabs()
+        renderBrowserContent()
       }
-
-      goBtn.addEventListener('click', navigate);
-      urlBar.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') navigate();
-      });
+      goBtn.addEventListener('click', go)
+      urlBar.addEventListener('keydown', e => { if (e.key === 'Enter') go() })
     }
-
-    if (bookmarksToggle) {
-      var dropdown = $('browser-bookmarks-dropdown');
-      bookmarksToggle.addEventListener('click', function () {
-        dropdown.classList.toggle('active');
-      });
-    }
+    $('browser-back')?.addEventListener('click', () => Toast.show('Browser', 'Navigation simulated', 'info'))
+    $('browser-forward')?.addEventListener('click', () => Toast.show('Browser', 'Navigation simulated', 'info'))
+    $('browser-refresh')?.addEventListener('click', () => renderBrowserContent())
+    $('browser-bookmarks-toggle')?.addEventListener('click', () => $('browser-bookmarks-dropdown')?.classList.toggle('active'))
   }
 
-  function renderBookmarks() {
-    var container = $('browser-bookmarks-dropdown');
-    if (!container) return;
+  // --- PRODUCTIVITY ---
+  registerPage('productivity', () => {
+    const data = Store.getData()
+    if (!data) return
+    renderNotes(data)
+    renderTasks(data)
+    setupPomodoro()
+    renderCalendar()
+  })
 
-    var data = getData();
-    if (!data) return;
+  function renderNotes (data) {
+    const container = $('notes-list')
+    const notes = (data.notes || []).slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+    container.innerHTML = notes.map(n =>
+      '<div class="note-item' + (n.pinned ? ' pinned' : '') + '" data-id="' + n.id + '"><div class="note-header"><div class="note-title">' + n.title + (n.pinned ? ' 📌' : '') + '</div></div><div class="note-content">' + trunc(n.content, 100) + '</div><div class="note-meta"><span class="note-date">' + fmtDate(n.upd || n.crt) + '</span><div class="note-actions"><button class="note-pin" data-id="' + n.id + '">' + (n.pinned ? 'Unpin' : 'Pin') + '</button><button class="note-edit" data-id="' + n.id + '">Edit</button><button class="note-del" data-id="' + n.id + '">Del</button></div></div></div>'
+    ).join('')
 
-    var html = '';
-    data.bookmarks.forEach(function (bm) {
-      html += '<div class="bookmark-item" data-url="' + bm.url + '">';
-      html += '<span class="bookmark-icon">' + bm.icon.charAt(0).toUpperCase() + '</span>';
-      html += '<span class="bookmark-title">' + bm.title + '</span>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-
-    qsa('.bookmark-item', container).forEach(function (item) {
-      item.addEventListener('click', function () {
-        var url = item.getAttribute('data-url');
-        for (var i = 0; i < HuntrixApp.browserTabs.length; i++) {
-          if (HuntrixApp.browserTabs[i].active) {
-            HuntrixApp.browserTabs[i].url = url;
-            HuntrixApp.browserTabs[i].title = item.querySelector('.bookmark-title').textContent;
-            break;
-          }
-        }
-        renderTabs();
-        renderBrowserContent();
-        container.classList.remove('active');
-      });
-    });
+    qsa('.note-pin', container).forEach(b => {
+      b.addEventListener('click', () => {
+        const n = data.notes.find(no => no.id === b.getAttribute('data-id'))
+        if (n) { n.pinned = !n.pinned; Store.saveData(); renderNotes(data) }
+      })
+    })
+    qsa('.note-edit', container).forEach(b => {
+      b.addEventListener('click', () => {
+        const n = data.notes.find(no => no.id === b.getAttribute('data-id'))
+        if (!n) return
+        $('note-title-input').value = n.title
+        $('note-content-input').value = n.content
+        $('note-modal-title').textContent = 'Edit Note'
+        $('note-form')._editId = n.id
+        $('note-modal-overlay').classList.add('open')
+      })
+    })
+    qsa('.note-del', container).forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.getAttribute('data-id')
+        data.notes = data.notes.filter(no => no.id !== id)
+        Store.saveData()
+        renderNotes(data)
+        addNotif('Note deleted', 'system')
+      })
+    })
   }
 
-  // ============================================================
-  // PRODUCTIVITY PAGE
-  // ============================================================
-
-  function showProductivity() {
-    var data = getData();
-    if (!data) return;
-
-    renderNotes(data.notes);
-    setupNotesCRUD(data);
-    renderTasks(data.tasks);
-    setupTasksCRUD(data);
-    setupPomodoro();
-    renderCalendar();
-  }
-
-  // --- Notes ---
-
-  function renderNotes(notes) {
-    var container = $('notes-list');
-    if (!container) return;
-
-    var html = '';
-    notes.forEach(function (note) {
-      html += '<div class="note-item ' + (note.pinned ? 'pinned' : '') + '" data-id="' + note.id + '">';
-      html += '<div class="note-header">';
-      html += '<h4 class="note-title">' + note.title + '</h4>';
-      if (note.pinned) html += '<span class="note-pin">📌</span>';
-      html += '</div>';
-      html += '<p class="note-content">' + truncate(note.content, 100) + '</p>';
-      html += '<div class="note-meta">';
-      html += '<span class="note-date">' + formatDate(note.updated) + '</span>';
-      html += '<div class="note-actions">';
-      html += '<button class="note-pin-btn" data-id="' + note.id + '">' + (note.pinned ? 'Unpin' : 'Pin') + '</button>';
-      html += '<button class="note-edit-btn" data-id="' + note.id + '">Edit</button>';
-      html += '<button class="note-delete-btn" data-id="' + note.id + '">Delete</button>';
-      html += '</div></div></div>';
-    });
-    container.innerHTML = html;
-  }
-
-  function setupNotesCRUD(data) {
-    var addBtn = $('note-add-btn');
-    var saveBtn = $('note-save-btn');
-    var cancelBtn = $('note-cancel-btn');
-    var modal = $('note-modal');
-    var overlay = $('note-overlay');
-    var form = $('note-form');
-    var titleInput = $('note-title-input');
-    var contentInput = $('note-content-input');
-    var editingId = null;
-
-    function openModal(note) {
-      if (modal) modal.classList.add('active');
-      if (overlay) overlay.classList.add('active');
-      if (titleInput) titleInput.value = note ? note.title : '';
-      if (contentInput) contentInput.value = note ? note.content : '';
-      editingId = note ? note.id : null;
-    }
-
-    function closeModal() {
-      if (modal) modal.classList.remove('active');
-      if (overlay) overlay.classList.remove('active');
-      if (titleInput) titleInput.value = '';
-      if (contentInput) contentInput.value = '';
-      editingId = null;
-    }
-
-    if (addBtn) addBtn.addEventListener('click', function () { openModal(null); });
-    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-    if (overlay) overlay.addEventListener('click', closeModal);
-
-    if (form) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var title = titleInput ? titleInput.value.trim() : '';
-        var content = contentInput ? contentInput.value.trim() : '';
-        if (!title) return;
-
-        if (editingId) {
-          for (var i = 0; i < data.notes.length; i++) {
-            if (data.notes[i].id === editingId) {
-              data.notes[i].title = title;
-              data.notes[i].content = content;
-              data.notes[i].updated = new Date().toISOString();
-              break;
-            }
-          }
-        } else {
-          data.notes.push({
-            id: 'note-' + (data.notesCounter || Date.now()),
-            title: title,
-            content: content,
-            created: new Date().toISOString(),
-            updated: new Date().toISOString(),
-            pinned: false
-          });
-          data.notesCounter = (data.notesCounter || Date.now()) + 1;
-        }
-        saveData(data);
-        renderNotes(data.notes);
-        addNotification(editingId ? 'Updated note: ' + title : 'Created note: ' + title, 'system');
-        closeModal();
-      });
-    }
-
-    document.addEventListener('click', function (e) {
-      var target = e.target;
-      if (target.classList.contains('note-pin-btn')) {
-        var id = target.getAttribute('data-id');
-        for (var i = 0; i < data.notes.length; i++) {
-          if (data.notes[i].id === id) {
-            data.notes[i].pinned = !data.notes[i].pinned;
-            break;
-          }
-        }
-        data.notes.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
-        saveData(data);
-        renderNotes(data.notes);
-      } else if (target.classList.contains('note-edit-btn')) {
-        var id = target.getAttribute('data-id');
-        for (var i = 0; i < data.notes.length; i++) {
-          if (data.notes[i].id === id) {
-            openModal(data.notes[i]);
-            break;
-          }
-        }
-      } else if (target.classList.contains('note-delete-btn')) {
-        var id = target.getAttribute('data-id');
-        for (var i = 0; i < data.notes.length; i++) {
-          if (data.notes[i].id === id) {
-            data.notes.splice(i, 1);
-            break;
-          }
-        }
-        saveData(data);
-        renderNotes(data.notes);
-        addNotification('Deleted note', 'system');
-      }
-    });
-  }
-
-  // --- Tasks ---
-
-  function renderTasks(tasks) {
-    var container = $('tasks-list');
-    if (!container) return;
-
-    var html = '';
-    tasks.forEach(function (task) {
-      var priorityClass = 'priority-' + (task.priority || 'medium');
-      html += '<div class="task-item ' + (task.completed ? 'completed' : '') + '" data-id="' + task.id + '">';
-      html += '<input type="checkbox" class="task-checkbox" data-id="' + task.id + '" ' + (task.completed ? 'checked' : '') + '>';
-      html += '<div class="task-content">';
-      html += '<span class="task-title">' + task.title + '</span>';
-      html += '<span class="task-meta">';
-      html += '<span class="task-priority ' + priorityClass + '">' + task.priority + '</span>';
-      if (task.dueDate) html += '<span class="task-due">' + formatDate(task.dueDate) + '</span>';
-      html += '<span class="task-category">' + task.category + '</span>';
-      html += '</span></div>';
-      html += '<button class="task-delete-btn" data-id="' + task.id + '">×</button>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-
-    qsa('.task-checkbox', container).forEach(function (cb) {
-      cb.addEventListener('change', function () {
-        var id = cb.getAttribute('data-id');
-        var data = getData();
-        if (!data) return;
-        for (var i = 0; i < data.tasks.length; i++) {
-          if (data.tasks[i].id === id) {
-            data.tasks[i].completed = cb.checked;
-            break;
-          }
-        }
-        saveData(data);
-        applyTaskFilter();
-      });
-    });
-
-    qsa('.task-delete-btn', container).forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = btn.getAttribute('data-id');
-        var data = getData();
-        if (!data) return;
-        for (var i = 0; i < data.tasks.length; i++) {
-          if (data.tasks[i].id === id) {
-            data.tasks.splice(i, 1);
-            break;
-          }
-        }
-        saveData(data);
-        applyTaskFilter();
-      });
-    });
-  }
-
-  function setupTasksCRUD(data) {
-    var addBtn = $('task-add-btn');
-    var input = $('task-input');
-    var filterBtns = qsa('.task-filter-btn');
-
-    if (addBtn && input) {
-      addBtn.addEventListener('click', function () {
-        var title = input.value.trim();
-        if (!title) return;
-        data.tasks.push({
-          id: 'task-' + (data.tasksCounter || Date.now()),
-          title: title,
-          completed: false,
-          priority: 'medium',
-          dueDate: new Date(Date.now() + 86400000 * 3).toISOString(),
-          category: 'general'
-        });
-        data.tasksCounter = (data.tasksCounter || Date.now()) + 1;
-        saveData(data);
-        input.value = '';
-        applyTaskFilter();
-        addNotification('Added task: ' + title, 'system');
-      });
-
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') addBtn.click();
-      });
-    }
-
-    filterBtns.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        filterBtns.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        applyTaskFilter();
-      });
-    });
-  }
-
-  function applyTaskFilter() {
-    var data = getData();
-    if (!data) return;
-    var activeFilter = qs('.task-filter-btn.active');
-    var filter = activeFilter ? activeFilter.getAttribute('data-filter') : 'all';
-    var filtered = data.tasks.slice();
-    if (filter === 'active') {
-      filtered = filtered.filter(function (t) { return !t.completed; });
-    } else if (filter === 'completed') {
-      filtered = filtered.filter(function (t) { return t.completed; });
-    }
-    renderTasks(filtered);
-  }
-
-  // --- Pomodoro Timer ---
-
-  function setupPomodoro() {
-    updatePomodoroDisplay();
-    var startBtn = $('pomodoro-start');
-    var pauseBtn = $('pomodoro-pause');
-    var resetBtn = $('pomodoro-reset');
-
-    if (startBtn) {
-      startBtn.addEventListener('click', function () {
-        if (!HuntrixApp.pomodoro.running) {
-          HuntrixApp.pomodoro.running = true;
-          HuntrixApp.pomodoro.interval = setInterval(pomodoroTick, 1000);
-        }
-      });
-    }
-
-    if (pauseBtn) {
-      pauseBtn.addEventListener('click', function () {
-        HuntrixApp.pomodoro.running = false;
-        if (HuntrixApp.pomodoro.interval) {
-          clearInterval(HuntrixApp.pomodoro.interval);
-          HuntrixApp.pomodoro.interval = null;
-        }
-      });
-    }
-
-    if (resetBtn) {
-      resetBtn.addEventListener('click', function () {
-        HuntrixApp.pomodoro.running = false;
-        if (HuntrixApp.pomodoro.interval) {
-          clearInterval(HuntrixApp.pomodoro.interval);
-          HuntrixApp.pomodoro.interval = null;
-        }
-        HuntrixApp.pomodoro.minutes = 25;
-        HuntrixApp.pomodoro.seconds = 0;
-        HuntrixApp.pomodoro.mode = 'work';
-        updatePomodoroDisplay();
-      });
-    }
-  }
-
-  function pomodoroTick() {
-    if (HuntrixApp.pomodoro.seconds === 0) {
-      if (HuntrixApp.pomodoro.minutes === 0) {
-        if (HuntrixApp.pomodoro.mode === 'work') {
-          HuntrixApp.pomodoro.mode = 'break';
-          HuntrixApp.pomodoro.minutes = 5;
-          HuntrixApp.pomodoro.seconds = 0;
-          addNotification('Pomodoro: Work session complete! Time for a break.', 'system');
-        } else {
-          HuntrixApp.pomodoro.mode = 'work';
-          HuntrixApp.pomodoro.minutes = 25;
-          HuntrixApp.pomodoro.seconds = 0;
-          addNotification('Pomodoro: Break over! Back to work.', 'system');
-        }
-      } else {
-        HuntrixApp.pomodoro.minutes--;
-        HuntrixApp.pomodoro.seconds = 59;
-      }
+  $('note-add-btn')?.addEventListener('click', () => {
+    $('note-title-input').value = ''
+    $('note-content-input').value = ''
+    $('note-modal-title').textContent = 'New Note'
+    $('note-form')._editId = null
+    $('note-modal-overlay').classList.add('open')
+  })
+  $('note-cancel-btn')?.addEventListener('click', () => $('note-modal-overlay')?.classList.remove('open'))
+  $('note-modal-cancel')?.addEventListener('click', () => $('note-modal-overlay')?.classList.remove('open'))
+  $('note-modal-overlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('open') })
+  $('note-form')?.addEventListener('submit', e => {
+    e.preventDefault()
+    const data = Store.getData()
+    if (!data) return
+    const title = $('note-title-input').value.trim()
+    const content = $('note-content-input').value.trim()
+    if (!title) return Toast.show('Error', 'Title is required', 'error')
+    const editId = $('note-form')._editId
+    if (editId) {
+      const n = data.notes.find(no => no.id === editId)
+      if (n) { n.title = title; n.content = content; n.upd = new Date().toISOString() }
     } else {
-      HuntrixApp.pomodoro.seconds--;
+      data.notes.push({ id: 'n-' + Date.now(), title, content, crt: new Date().toISOString(), upd: new Date().toISOString(), pinned: false })
     }
-    updatePomodoroDisplay();
+    Store.saveData()
+    $('note-modal-overlay').classList.remove('open')
+    renderNotes(data)
+    addNotif(editId ? 'Note updated' : 'Note created', 'system')
+  })
+
+  function renderTasks (data) {
+    const container = $('tasks-list')
+    const filter = qs('.task-filter-btn.active')?.getAttribute('data-filter') || 'all'
+    let tasks = data.tasks || []
+    if (filter === 'active') tasks = tasks.filter(t => !t.done)
+    else if (filter === 'completed') tasks = tasks.filter(t => t.done)
+    container.innerHTML = tasks.map(t =>
+      '<div class="task-item' + (t.done ? ' completed' : '') + '" data-id="' + t.id + '"><input type="checkbox" class="task-checkbox" data-id="' + t.id + '" ' + (t.done ? 'checked' : '') + '><div class="task-content"><span class="task-title">' + t.title + '</span><div class="task-meta"><span>' + (t.prio || 'medium') + '</span><span>' + (t.cat || 'general') + '</span></div></div><button class="task-delete-btn" data-id="' + t.id + '">×</button></div>'
+    ).join('')
+
+    qsa('.task-checkbox', container).forEach(cb => {
+      cb.addEventListener('change', () => {
+        const t = data.tasks.find(ta => ta.id === cb.getAttribute('data-id'))
+        if (t) { t.done = cb.checked; Store.saveData(); renderTasks(data) }
+      })
+    })
+    qsa('.task-delete-btn', container).forEach(b => {
+      b.addEventListener('click', () => {
+        data.tasks = data.tasks.filter(ta => ta.id !== b.getAttribute('data-id'))
+        Store.saveData()
+        renderTasks(data)
+      })
+    })
   }
 
-  function updatePomodoroDisplay() {
-    var display = $('pomodoro-display');
-    var modeEl = $('pomodoro-mode');
-    if (display) {
-      var m = String(HuntrixApp.pomodoro.minutes).padStart(2, '0');
-      var s = String(HuntrixApp.pomodoro.seconds).padStart(2, '0');
-      display.textContent = m + ':' + s;
-    }
-    if (modeEl) {
-      modeEl.textContent = HuntrixApp.pomodoro.mode === 'work' ? 'Focus Time' : 'Break Time';
-    }
+  qsa('.task-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      qsa('.task-filter-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      const data = Store.getData()
+      if (data) renderTasks(data)
+    })
+  })
+
+  $('task-add-btn')?.addEventListener('click', () => {
+    const input = $('task-input')
+    if (!input?.value.trim()) return Toast.show('Error', 'Task title required', 'error')
+    const data = Store.getData()
+    if (!data) return
+    data.tasks = data.tasks || []
+    data.tasks.push({ id:'t-'+Date.now(), title: input.value.trim(), done:false, prio:'medium', cat:'general', due: new Date(Date.now()+86400000*3).toISOString() })
+    Store.saveData()
+    input.value = ''
+    renderTasks(data)
+    addNotif('Task added', 'system')
+  })
+  $('task-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') $('task-add-btn')?.click() })
+
+  // Pomodoro
+  let pomo = { minutes: 25, seconds: 0, interval: null, running: false, mode: 'work' }
+  function setupPomodoro () {
+    updatePomo()
+    $('pomodoro-start')?.addEventListener('click', () => {
+      if (!pomo.running) { pomo.running = true; pomo.interval = setInterval(pomoTick, 1000) }
+    })
+    $('pomodoro-pause')?.addEventListener('click', () => { pomo.running = false; if (pomo.interval) { clearInterval(pomo.interval); pomo.interval = null } })
+    $('pomodoro-reset')?.addEventListener('click', () => {
+      pomo.running = false; if (pomo.interval) { clearInterval(pomo.interval); pomo.interval = null }
+      pomo.minutes = 25; pomo.seconds = 0; pomo.mode = 'work'; updatePomo()
+    })
   }
 
-  // --- Calendar ---
-
-  function renderCalendar() {
-    var container = $('productivity-calendar');
-    if (!container) return;
-
-    var now = new Date();
-    var year = now.getFullYear();
-    var month = now.getMonth();
-    var firstDay = new Date(year, month, 1).getDay();
-    var daysInMonth = new Date(year, month + 1, 0).getDate();
-    var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-    var html = '<div class="calendar-header"><span>' + monthNames[month] + ' ' + year + '</span></div>';
-    html += '<div class="calendar-weekdays">';
-    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    days.forEach(function (d) { html += '<span>' + d + '</span>'; });
-    html += '</div><div class="calendar-days">';
-
-    for (var i = 0; i < firstDay; i++) {
-      html += '<span class="cal-day cal-empty"></span>';
-    }
-
-    var today = now.getDate();
-    for (var d = 1; d <= daysInMonth; d++) {
-      html += '<span class="cal-day' + (d === today ? ' cal-today' : '') + '">' + d + '</span>';
-    }
-    html += '</div>';
-    container.innerHTML = html;
+  function pomoTick () {
+    if (pomo.seconds === 0) {
+      if (pomo.minutes === 0) {
+        if (pomo.mode === 'work') { pomo.mode = 'break'; pomo.minutes = 5; pomo.seconds = 0; addNotif('Work session complete! Time for a break.', 'system') }
+        else { pomo.mode = 'work'; pomo.minutes = 25; pomo.seconds = 0; addNotif('Break over! Back to focus.', 'system') }
+      } else { pomo.minutes--; pomo.seconds = 59 }
+    } else { pomo.seconds-- }
+    updatePomo()
   }
 
-  // ============================================================
-  // ANALYTICS PAGE
-  // ============================================================
-
-  function showAnalytics() {
-    var data = getData();
-    if (!data) return;
-
-    renderAnalyticsStats(data);
-    renderCharts(data);
-    setupExport(data);
+  function updatePomo () {
+    const d = $('pomodoro-display')
+    const m = $('pomodoro-mode')
+    if (d) d.textContent = String(pomo.minutes).padStart(2,'0') + ':' + String(pomo.seconds).padStart(2,'0')
+    if (m) m.textContent = pomo.mode === 'work' ? '🎯 Focus Time' : '☕ Break Time'
   }
 
-  function renderAnalyticsStats(data) {
-    var statNames = ['cpu', 'ram', 'storage', 'network'];
-    statNames.forEach(function (key) {
-      var el = $('analytics-' + key);
-      if (!el) return;
-      var val = data.stats[key] || 0;
-      el.textContent = val + '%';
-      var bar = qs('.analytics-stat-bar-fill', el.parentNode);
-      if (bar) {
-        bar.style.width = '0%';
-        setTimeout(function () { bar.style.width = val + '%'; }, 200);
+  function renderCalendar () {
+    const container = $('productivity-calendar')
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth()
+    const firstDay = new Date(year, month, 1).getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    let html = '<div class="calendar-header">' + months[month] + ' ' + year + '</div><div class="calendar-weekdays">' + dayNames.map(d => '<span>' + d + '</span>').join('') + '</div><div class="calendar-days">'
+    for (let i = 0; i < firstDay; i++) html += '<span class="cal-day cal-empty"></span>'
+    const today = now.getDate()
+    for (let d = 1; d <= daysInMonth; d++) html += '<span class="cal-day' + (d === today ? ' cal-today' : '') + '">' + d + '</span>'
+    html += '</div>'
+    container.innerHTML = html
+  }
+
+  // --- SETTINGS ---
+  registerPage('settings', () => {
+    const prefs = Store.getPrefs()
+    $('settings-name').value = 'Admin User'
+    $('settings-username').value = Store.user || 'user'
+    $('settings-theme').value = prefs.theme || 'dark'
+    $('settings-accent').value = prefs.accent || '#00d4ff'
+    $('settings-accent-val').textContent = prefs.accent || '#00d4ff'
+    $('settings-notifications').checked = prefs.notifications !== false
+    $('settings-version').textContent = 'Huntrix OS Dashboard v2.0.0'
+
+    $('settings-accent').addEventListener('input', function () {
+      $('settings-accent-val').textContent = this.value
+      applyAccent(this.value)
+    })
+
+    $('settings-theme').addEventListener('change', function () {
+      applyTheme(this.value)
+      const p = Store.getPrefs(); p.theme = this.value; Store.savePrefs(p)
+    })
+
+    $('settings-notifications').addEventListener('change', function () {
+      const p = Store.getPrefs(); p.notifications = this.checked; Store.savePrefs(p)
+    })
+  })
+
+  // Data Management
+  $('export-data-btn')?.addEventListener('click', exportAllData)
+
+  $('import-data-btn')?.addEventListener('click', () => $('import-file-input')?.click())
+  $('import-file-input')?.addEventListener('change', function () {
+    const file = this.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result)
+        if (!data || !data.ownedCookies) throw new Error('Invalid data format')
+        localStorage.setItem(Store.key(), JSON.stringify(data))
+        Store._data = null
+        Store.getData()
+        Toast.show('Success', 'Data imported successfully!', 'success')
+        addNotif('Data imported from ' + file.name, 'system')
+        navigateTo(currentPage)
+      } catch (err) {
+        Toast.show('Import Error', 'Invalid file format: ' + err.message, 'error')
       }
-    });
-
-    var uptimeEl = $('analytics-uptime');
-    if (uptimeEl) {
-      var hours = randomBetween(48, 720);
-      uptimeEl.textContent = Math.floor(hours / 24) + 'd ' + (hours % 24) + 'h';
     }
+    reader.readAsText(file)
+    this.value = ''
+  })
 
-    var sessionsEl = $('analytics-sessions');
-    if (sessionsEl) {
-      sessionsEl.textContent = randomBetween(150, 500);
+  $('reset-data-btn')?.addEventListener('click', () => {
+    if (confirm('Are you sure you want to reset ALL data? This cannot be undone.')) {
+      localStorage.removeItem(Store.key())
+      Store._data = null
+      Store.getData()
+      Toast.show('Data Reset', 'All data has been reset to defaults', 'info')
+      addNotif('Data reset completed', 'system')
+      navigateTo(currentPage)
     }
+  })
+
+  function exportAllData () {
+    const data = Store.getData()
+    if (!data) return
+    const exportObj = {
+      version: '2.0.0',
+      exportedAt: new Date().toISOString(),
+      stats: data.stats,
+      ownedCookies: data.ownedCookies || [],
+      favoriteCookies: data.favoriteCookies || [],
+      pullHistory: (data.pullHistory || []).slice(0, 100),
+      notes: (data.notes || []).length,
+      tasks: (data.tasks || []).length,
+    }
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'huntrix-backup-' + new Date().toISOString().slice(0, 10) + '.json'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    addNotif('Data exported successfully', 'system')
   }
 
-  function renderCharts(data) {
-    var cpuChart = $('cpu-chart');
-    var ramChart = $('ram-chart');
-    var activityChart = $('activity-chart');
+  // ============================================================
+  // AUTH
+  // ============================================================
+  function initAuth () {
+    const authContainer = $('auth-container')
+    const app = $('app')
 
-    if (cpuChart) {
-      var bars = '';
-      for (var i = 0; i < 12; i++) {
-        var h = randomBetween(20, 90);
-        bars += '<div class="chart-bar" style="height: ' + h + '%"><span>' + h + '%</span></div>';
+    function showApp () {
+      authContainer.classList.add('hidden')
+      app.classList.add('active')
+    }
+
+    function showAuth () {
+      authContainer.classList.remove('hidden')
+      app.classList.remove('active')
+    }
+
+    if (Store.init()) {
+      showApp()
+    } else {
+      showAuth()
+      $('loading-screen')?.classList.add('hidden')
+    }
+
+    // Login
+    $('login-form')?.addEventListener('submit', e => {
+      e.preventDefault()
+      const username = $('login-username')
+      const password = $('login-password')
+      const msg = $('login-message')
+      if (!username || !password) return
+      const result = Store.login(username.value, password.value)
+      if (msg) { msg.textContent = result.msg; msg.className = 'form-message' + (result.ok ? ' success' : '') }
+      if (result.ok) {
+        loadApp()
+        username.value = ''; password.value = ''
       }
-      cpuChart.innerHTML = bars;
-    }
+    })
 
-    if (ramChart) {
-      var donutHtml = '<div class="donut-chart" style="--pct: ' + data.stats.ram + '">';
-      donutHtml += '<span class="donut-label">' + data.stats.ram + '%</span></div>';
-      ramChart.innerHTML = donutHtml;
-    }
-
-    if (activityChart) {
-      var lines = '';
-      for (var i = 0; i < 20; i++) {
-        var h = randomBetween(10, 100);
-        lines += '<div class="activity-bar" style="height: ' + h + '%"></div>';
+    // Register
+    $('register-form')?.addEventListener('submit', e => {
+      e.preventDefault()
+      const username = $('reg-username')
+      const password = $('reg-password')
+      const confirm = $('reg-confirm')
+      const msg = $('register-message')
+      if (!username || !password) return
+      if (confirm && confirm.value !== password.value) {
+        if (msg) { msg.textContent = 'Passwords do not match.'; msg.className = 'form-message' }
+        return
       }
-      activityChart.innerHTML = lines;
-    }
-  }
+      const result = Store.register(username.value, password.value)
+      if (msg) { msg.textContent = result.msg; msg.className = 'form-message' + (result.ok ? ' success' : '') }
+      if (result.ok) {
+        loadApp()
+        username.value = ''; password.value = ''; if (confirm) confirm.value = ''
+      }
+    })
 
-  function setupExport(data) {
-    var exportBtn = $('analytics-export-btn');
-    if (!exportBtn) return;
+    // Switch auth pages
+    $('show-register')?.addEventListener('click', e => {
+      e.preventDefault()
+      $('auth-login').classList.remove('active')
+      $('auth-register').classList.add('active')
+      $('login-message').textContent = ''
+    })
+    $('show-login')?.addEventListener('click', e => {
+      e.preventDefault()
+      $('auth-register').classList.remove('active')
+      $('auth-login').classList.add('active')
+      $('register-message').textContent = ''
+    })
 
-    exportBtn.addEventListener('click', function () {
-      var exportData = {
-        stats: data.stats,
-        packages: data.packages.length,
-        repos: data.repos.length,
-        files: data.cloudFiles.length,
-        tasks: data.tasks.length,
-        notes: data.notes.length,
-        activities: data.activities.length,
-        timestamp: new Date().toISOString()
-      };
+    // Logout
+    $('logout-btn')?.addEventListener('click', () => {
+      Store.logout()
+      showAuth()
+      qs('.sidebar')?.classList.remove('open')
+      qs('.sidebar-overlay')?.classList.remove('open')
+    })
 
-      var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = 'huntrix-analytics-export.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      addNotification('Analytics data exported', 'analytics');
-    });
-  }
+    function loadApp () {
+      showApp()
+      const data = Store.getData()
+      const prefs = Store.getPrefs()
+      applyTheme(prefs.theme || 'dark')
+      applyAccent(prefs.accent || '#00d4ff')
 
-  // ============================================================
-  // SETTINGS PAGE
-  // ============================================================
+      $('user-avatar').textContent = (Store.user || 'U').charAt(0).toUpperCase()
+      $('user-name').textContent = Store.user || 'User'
 
-  function showSettings() {
-    var prefs = getPreferences();
+      initNavigation()
+      initNotifications()
+      initSearch()
+      initCommandPalette()
+      initCRKEvents()
 
-    var nameEl = $('settings-name');
-    var usernameEl = $('settings-username');
-    var emailEl = $('settings-email');
-    var themeSelect = $('settings-theme');
-    var accentInput = $('settings-accent');
-    var notifToggle = $('settings-notifications');
-    var camPerm = $('settings-camera');
-    var micPerm = $('settings-mic');
-    var versionEl = $('settings-version');
+      // Show loading screen briefly then fade
+      const ls = $('loading-screen')
+      setTimeout(() => ls?.classList.add('hidden'), 500)
 
-    if (nameEl) nameEl.value = 'Huntrix User';
-    if (usernameEl) usernameEl.value = HuntrixApp.user || 'user';
-    if (emailEl) emailEl.value = 'user@huntrix.os';
-    if (themeSelect) themeSelect.value = prefs.theme || 'dark';
-    if (accentInput) accentInput.value = prefs.accent || '#00f0ff';
-    if (notifToggle) notifToggle.checked = prefs.notifications !== false;
-    if (camPerm) camPerm.textContent = 'Granted';
-    if (micPerm) micPerm.textContent = 'Granted';
-    if (versionEl) versionEl.textContent = 'Huntrix OS Dashboard v' + HuntrixApp.version;
-
-    setupSettingsSave();
-    setupSettingsTheme(themeSelect);
-    setupSettingsAccent(accentInput);
-  }
-
-  function setupSettingsTheme(themeSelect) {
-    if (!themeSelect) return;
-    themeSelect.addEventListener('change', function () {
-      applyTheme(themeSelect.value);
-    });
-  }
-
-  function setupSettingsAccent(accentInput) {
-    if (!accentInput) return;
-    accentInput.addEventListener('input', function () {
-      applyAccent(accentInput.value);
-    });
-  }
-
-  function setupSettingsSave() {
-    var saveBtn = $('settings-save-btn');
-    if (!saveBtn) return;
-
-    saveBtn.addEventListener('click', function () {
-      var prefs = getPreferences();
-      var nameEl = $('settings-name');
-      var emailEl = $('settings-email');
-      var themeSelect = $('settings-theme');
-      var accentInput = $('settings-accent');
-      var notifToggle = $('settings-notifications');
-
-      prefs.theme = themeSelect ? themeSelect.value : prefs.theme;
-      prefs.accent = accentInput ? accentInput.value : prefs.accent;
-      prefs.notifications = notifToggle ? notifToggle.checked : prefs.notifications;
-      savePreferences(prefs);
-
-      applyTheme(prefs.theme);
-      applyAccent(prefs.accent);
-
-      addNotification('Settings saved successfully', 'system');
-    });
-  }
-
-  // ============================================================
-  // INITIALIZATION
-  // ============================================================
-
-  function init() {
-    var authUser = localStorage.getItem('huntrix_auth_user');
-    if (!authUser) {
-      authUser = 'admin';
-      localStorage.setItem('huntrix_auth_user', authUser);
-    }
-    HuntrixApp.user = authUser;
-
-    var data = getData();
-    if (!data) {
-      data = generateMockData(authUser);
+      navigateTo('dashboard')
     }
 
-    var prefs = getPreferences();
-    applyTheme(prefs.theme || 'dark');
-    applyAccent(prefs.accent || '#00f0ff');
-
-    initNavigation();
-    initNotifications();
-    initSearch();
-
-    addNotification('Welcome to Huntrix OS Dashboard v' + HuntrixApp.version, 'system');
-
-    navigateTo('dashboard');
+    // If already authenticated, load
+    if (Store.init()) loadApp()
   }
 
-  window.HuntrixApp = HuntrixApp;
+  // CRK filter/sort events (delegated)
+  function initCRKEvents () {
+    const sortEl = $('crk-sort')
+    if (sortEl && !sortEl._init) {
+      sortEl._init = true
+      sortEl.addEventListener('change', () => {
+        crkSort = sortEl.value
+        const data = Store.getData()
+        if (data) renderCRK(data)
+      })
+    }
+    // Pull modal
+    const pullOverlay = $('pulls-modal-overlay')
+    $('pulls-modal-close')?.addEventListener('click', () => pullOverlay?.classList.remove('open'))
+    pullOverlay?.addEventListener('click', e => { if (e.target === pullOverlay) pullOverlay.classList.remove('open') })
 
+    $('simulate-pull-btn')?.addEventListener('click', () => {
+      const results = simulatePull()
+      if (results) {
+        Toast.show('🎲 10-Pull Complete!', 'Got ' + results.filter(r => ['Beast','Ancient','Legendary','Dragon'].includes(r.rarity)).length + ' high-rarity!', 'success')
+        renderPullHistory()
+        navigateTo('crk-gacha')
+      }
+    })
+
+    $('clear-pull-history')?.addEventListener('click', () => {
+      const data = Store.getData()
+      if (data) { data.pullHistory = []; Store.saveData(); renderPullHistory(); addNotif('Pull history cleared', 'system') }
+    })
+  }
+
+  // ============================================================
+  // BOOT
+  // ============================================================
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', initAuth)
   } else {
-    init();
+    initAuth()
   }
-})();
+})()
