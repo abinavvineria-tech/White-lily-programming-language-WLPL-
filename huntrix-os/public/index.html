@@ -1146,7 +1146,7 @@
         var btnTxt = pkg.installed ? 'Uninstall' : 'Install';
         var cliCmd = '';
         if (pkg.name === 'com.devsisters.ck') {
-          cliCmd = '<div style="margin-top:8px;padding:6px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-family:monospace;font-size:0.7rem;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:6px" onclick="var el=this;navigator.clipboard.writeText(\'monkey -p com.devsisters.ck 1\');el.textContent=\'✓ Copied!\';setTimeout(function(){el.innerHTML=\'<span>$</span> monkey -p com.devsisters.ck 1\'},1500)" title="Click to copy"><span>$</span> monkey -p com.devsisters.ck 1</div>';
+          cliCmd = '<div style="margin-top:8px;padding:6px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-family:monospace;font-size:0.7rem;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:6px" onclick="var el=this;navigator.clipboard.writeText(\'am start -n com.devsisters.ck/.MainActivity\');el.textContent=\'✓ Copied!\';setTimeout(function(){el.innerHTML=\'<span>$</span> am start -n com.devsisters.ck/.MainActivity\'},1500)" title="Click to copy"><span>$</span> am start -n com.devsisters.ck/.MainActivity</div>';
         }
         card.innerHTML = '<div class="pkg-name">' + pkg.name + '</div><div class="pkg-desc">' + pkg.desc + '</div><div class="pkg-ver">v' + pkg.version + '</div>' + cliCmd + '<button class="' + btnCls + ' pkg-action" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;width:100%" data-pkg="' + pkg.name + '">' + btnTxt + '</button>';
         allGrid.appendChild(card);
