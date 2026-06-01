@@ -353,7 +353,7 @@
       <div class="sidebar-nav">
         <a class="nav-item active" data-page="dashboard" href="#dashboard" aria-label="Dashboard"><span class="icon">⌂</span> Dashboard</a>
         <a class="nav-item" data-page="wlpm" href="#wlpm" aria-label="WLPM"><span class="icon">◈</span> WLPM</a>
-        <a class="nav-item" data-page="crk-hub" href="#crk-hub" aria-label="CRK Hub"><span class="icon">⎔</span> CRK Hub</a>
+        <a class="nav-item" data-page="crk-launcher" href="#crk-launcher" aria-label="CRK Launcher"><span class="icon">🍪</span> CRK Launcher</a>
         <a class="nav-item" data-page="developer-hub" href="#developer-hub" aria-label="Developer Hub"><span class="icon">⚙</span> Developer Hub</a>
         <a class="nav-item" data-page="cloud-center" href="#cloud-center" aria-label="Cloud Center"><span class="icon">☁</span> Cloud Center</a>
         <a class="nav-item" data-page="media-center" href="#media-center" aria-label="Media Center"><span class="icon">▶</span> Media Center</a>
@@ -481,24 +481,22 @@
           </div>
         </section>
 
-        <!-- CRK Hub -->
-        <section class="page" id="page-crk-hub" aria-label="CRK Hub">
-          <h1>⎔ Code Repository Kit</h1>
-          <p>Browse, search, and manage your code repositories.</p>
-          <div class="search-bar-lg"><span class="s-icon">🔍</span><input type="text" placeholder="Search repositories..." aria-label="Search repositories"></div>
-          <div class="two-col">
-            <div>
-              <div class="section-title">🔥 Trending Repositories</div>
-              <div class="repo-list" id="crk-repo-list"></div>
+        <!-- CRK Launcher -->
+        <section class="page" id="page-crk-launcher" aria-label="CRK Launcher">
+          <h1>🍪 Cookie Run Kingdom</h1>
+          <p>Launch Cookie Run Kingdom on your device.</p>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:24px;padding:40px 20px">
+            <div style="font-size:6rem">🍪</div>
+            <h2 style="font-size:1.4rem;text-align:center">Cookie Run: Kingdom</h2>
+            <p style="color:var(--text-muted);text-align:center;max-width:400px">Tap below to open the game or copy the CLI command for Termux.</p>
+            <button class="btn-primary" style="font-size:1.1rem;padding:14px 40px" onclick="var l=document.createElement('a');l.href='intent://#Intent;package=com.devsisters.ck;end';l.style.display='none';document.body.appendChild(l);l.click();document.body.removeChild(l);">▶ Launch Game</button>
+            <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:400px">
+              <div style="font-size:0.85rem;color:var(--text-muted);text-align:center">CLI command (click to copy)</div>
+              <div style="padding:12px 16px;background:rgba(0,0,0,0.3);border-radius:8px;font-family:monospace;font-size:0.85rem;color:var(--accent);cursor:pointer;text-align:center;border:1px solid var(--border)" onclick="navigator.clipboard.writeText('am start -n com.devsisters.ck/.MainActivity');this.textContent='✓ Copied!';var t=this;setTimeout(function(){t.innerHTML='<span style=\"color:var(--text-muted)\">$</span> am start -n com.devsisters.ck/.MainActivity'},1500)"><span style="color:var(--text-muted)">$</span> am start -n com.devsisters.ck/.MainActivity</div>
             </div>
-            <div>
-              <div class="section-title">➕ New Repository</div>
-              <form style="display:flex;flex-direction:column;gap:12px" id="new-repo-form">
-                <input type="text" placeholder="Repository name" aria-label="Repository name">
-                <textarea rows="3" placeholder="Description (optional)" aria-label="Repository description"></textarea>
-                <select aria-label="Visibility"><option>Public</option><option>Private</option></select>
-                <button class="btn-primary" type="submit">Create Repository</button>
-              </form>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+              <a href="intent://#Intent;package=com.devsisters.ck;end" style="padding:10px 20px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:0.9rem">📱 Open App</a>
+              <a href="market://details?id=com.devsisters.ck" style="padding:10px 20px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:0.9rem">🛒 Play Store</a>
             </div>
           </div>
         </section>
@@ -1083,7 +1081,6 @@
   function renderAllSections(username) {
     renderDashboard(username);
     renderPackages(username);
-    renderRepos(username);
     renderCloudFiles(username);
     renderMedia(username);
     renderNotes(username);
@@ -1216,67 +1213,6 @@
       currentPkgFilter = this.value;
       var u = localStorage.getItem('huntrix_user');
       if (u) renderPackages(u, currentPkgFilter);
-    });
-  }
-
-  var currentRepoFilter = '';
-
-  function renderRepos(username, filterText) {
-    var data = getUserData(username);
-    if (!data) return;
-    var repos = data.repos || [];
-    var repoList = document.getElementById('crk-repo-list');
-    if (!repoList) return;
-
-    var term = (filterText || '').toLowerCase();
-    var filtered = repos.filter(function(r) {
-      return r.name.toLowerCase().indexOf(term) !== -1 || (r.desc || '').toLowerCase().indexOf(term) !== -1;
-    });
-    repoList.innerHTML = '';
-    if (filtered.length === 0) {
-      repoList.innerHTML = '<p style="color:var(--text-muted);padding:20px">No repositories found.</p>';
-    } else {
-      filtered.forEach(function(repo) {
-        var item = document.createElement('div');
-        item.className = 'repo-item';
-        item.innerHTML = '<span class="repo-icon">\ud83d\udcc1</span><div class="repo-info"><div class="repo-name">' + repo.name + '</div><div class="repo-meta">' + (repo.desc ? repo.desc + ' \u00b7 ' : '') + 'Updated ' + repo.updated + ' \u00b7 ' + repo.license + '</div></div><span class="repo-stars">\u2605 ' + repo.stars + '</span>';
-        repoList.appendChild(item);
-      });
-    }
-  }
-
-  var crkSearch = document.querySelector('#page-crk-hub .search-bar-lg input');
-  if (crkSearch) {
-    crkSearch.addEventListener('input', function() {
-      currentRepoFilter = this.value;
-      var u = localStorage.getItem('huntrix_user');
-      if (u) renderRepos(u, currentRepoFilter);
-    });
-  }
-
-  var newRepoForm = document.getElementById('new-repo-form');
-  if (newRepoForm) {
-    newRepoForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      var u = localStorage.getItem('huntrix_user');
-      if (!u) return;
-      var nameInput = newRepoForm.querySelector('input[type="text"]');
-      var descInput = newRepoForm.querySelector('textarea');
-      var visSelect = newRepoForm.querySelector('select');
-      var name = nameInput.value.trim();
-      if (!name) { alert('Please enter a repository name.'); return; }
-      var data = getUserData(u);
-      data.repos.push({
-        name: name,
-        desc: descInput.value.trim(),
-        license: visSelect.value === 'Private' ? 'Proprietary' : 'MIT',
-        stars: 0,
-        updated: 'Just now',
-      });
-      saveUserData(u, data);
-      nameInput.value = '';
-      descInput.value = '';
-      renderRepos(u, currentRepoFilter);
     });
   }
 
