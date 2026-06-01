@@ -489,13 +489,7 @@
           <div class="two-col">
             <div>
               <div class="section-title">🔥 Trending Repositories</div>
-              <div class="repo-list">
-                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">huntrix/neural-core</div><div class="repo-meta">Updated 2h ago • MIT</div></div><span class="repo-stars">★ 342</span></div>
-                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">lily-os/package-registry</div><div class="repo-meta">Updated 5h ago • Apache 2.0</div></div><span class="repo-stars">★ 218</span></div>
-                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">cyber-core/quantum-shield</div><div class="repo-meta">Updated 1d ago • GPL 3.0</div></div><span class="repo-stars">★ 189</span></div>
-                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">nexus-dev/vault-proto</div><div class="repo-meta">Updated 2d ago • MIT</div></div><span class="repo-stars">★ 156</span></div>
-                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">huntrix/ui-kit</div><div class="repo-meta">Updated 3d ago • MIT</div></div><span class="repo-stars">★ 94</span></div>
-              </div>
+              <div class="repo-list" id="crk-repo-list"></div>
             </div>
             <div>
               <div class="section-title">➕ New Repository</div>
@@ -1214,9 +1208,7 @@
     var data = getUserData(username);
     if (!data) return;
     var repos = data.repos || [];
-    var section = document.getElementById('page-crk-hub');
-    if (!section) return;
-    var repoList = section.querySelector('.two-col > div:first-child .repo-list');
+    var repoList = document.getElementById('crk-repo-list');
     if (!repoList) return;
 
     var term = (filterText || '').toLowerCase();
