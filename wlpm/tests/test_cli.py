@@ -121,3 +121,102 @@ class TestCLIMain(unittest.TestCase):
 
         main(["info", "test-pkg"])
         mock_installer.info.assert_called_once_with("test-pkg")
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_show(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["show", "test-pkg"])
+        mock_installer.info.assert_called_once_with("test-pkg")
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_upgrade(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["upgrade"])
+        mock_installer.upgrade.assert_called_once()
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_full_upgrade(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["full-upgrade"])
+        mock_installer.full_upgrade.assert_called_once()
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_purge(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["purge", "test-pkg"])
+        mock_installer.purge.assert_called_once_with("test-pkg")
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_autoremove(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["autoremove"])
+        mock_installer.autoremove.assert_called_once()
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_reinstall(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["reinstall", "test-pkg"])
+        mock_installer.reinstall.assert_called_once_with("test-pkg")
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_history(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["history"])
+        mock_installer.show_history.assert_called_once_with(20)
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_undo(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["undo"])
+        mock_installer.undo.assert_called_once()
+
+    @patch("wlpm.cli.Installer")
+    @patch("wlpm.cli.Config")
+    def test_main_clean(self, MockConfig, MockInstaller):
+        mock_config = MagicMock()
+        MockConfig.return_value = mock_config
+        mock_installer = MagicMock()
+        MockInstaller.return_value = mock_installer
+
+        main(["clean"])
+        mock_installer.clean.assert_called_once()

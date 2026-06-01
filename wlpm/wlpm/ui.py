@@ -198,6 +198,48 @@ class ProgressBar:
         print()
 
 
+class NalaProgress:
+    def __init__(self):
+        self.items = {}
+        self._active = False
+
+    def add(self, name: str, total: int = 1):
+        self.items[name] = {"current": 0, "total": max(total, 1), "done": False}
+
+    def update(self, name: str, amount: int = 1):
+        if name in self.items:
+            self.items[name]["current"] = min(
+                self.items[name]["current"] + amount, self.items[name]["total"]
+            )
+        self._draw()
+
+    def finish(self, name: str):
+        if name in self.items:
+            self.items[name]["done"] = True
+            self.items[name]["current"] = self.items[name]["total"]
+        self._draw()
+
+    def _draw(self):
+        lines = []
+        for name, data in self.items.items():
+            if data["done"]:
+                pct = 100
+                bar = colorize("❀" * 10, "green")
+            else:
+                pct = int(data["current"] / data["total"] * 100) if data["total"] else 0
+                filled = pct // 10
+                bar = colorize("❀" * filled, "green") + colorize("·" * (10 - filled), "dim")
+            lines.append(f"  {bar}  {pct:3d}%  {colorize(name, 'silver')}")
+        sys.stdout.write("\033[K" + "\n".join(lines) + "\033[A" * (len(lines) - 1) + "\r")
+        sys.stdout.flush()
+
+    def clear(self):
+        if self.items:
+            sys.stdout.write("\033[J")
+            sys.stdout.flush()
+        self.items = {}
+
+
 def confirm(message):
     try:
         response = input(colorize(f"  ❀  {message} [Y/n] ", "green")).strip().lower()

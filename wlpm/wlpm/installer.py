@@ -1,261 +1,350 @@
-"""Package installation, removal, and update logic."""
+"""Package installation, removal, and update logic using system package manager."""
 
-import json
 import os
+import re
 import shutil
-import tempfile
-from urllib.request import urlopen, Request
-from urllib.error import URLError
+import subprocess
 
+from wlpm.backends import get_backend
+from wlpm.cache import InstallRecord, History
 from wlpm.ui import (
     success, error, info, warning,
     install_msg, remove_msg, update_msg, done_msg,
-    ProgressBar, Spinner, confirm,
+    confirm, colorize, Spinner,
 )
-from wlpm.package import PackageMetadata, Version, parse_dependency_spec, check_version_satisfies
-from wlpm.dependency import DependencyResolver, DependencyError
-from wlpm.repository import RepositoryManager
-from wlpm.cache import Cache, InstallRecord
 
 
 class Installer:
     def __init__(self, config):
         self.config = config
-        self.cache = Cache(config.cache_dir)
+        self.backend = get_backend()
         self.records = InstallRecord(config.install_dir)
-        self.repo_manager = RepositoryManager(config)
+        self.history = History(os.path.join(config.config_dir, "history"))
+
+        if not self.backend:
+            error("No supported package manager found (apt/pkg).")
+            raise SystemExit(1)
 
     def install(self, package_name: str, version: str = ""):
-        self.cache.ensure_dirs()
-        self.records.ensure_dirs()
-        self.repo_manager.load()
+        packages = [package_name]
+        if version:
+            packages = [f"{package_name}={version}"]
 
-        info("Opening the garden gates...")
-        with Spinner("Gathering flower seeds..."):
-            self.repo_manager.fetch_all()
+        display = f"{package_name} {version}" if version else package_name
+        install_msg(display)
 
-        spec = f"=={version}" if version else ""
-
-        resolver = DependencyResolver(self.repo_manager.repositories, self.cache)
-        try:
-            if spec:
-                resolved = resolver.resolve(package_name, spec)
-            else:
-                resolved = resolver.resolve(package_name, "")
-        except DependencyError as e:
-            error(f"Failed to resolve dependencies: {e}")
+        if not confirm(f"Install {display}?"):
             return False
 
-        names = list(resolved.keys())
-        main_idx = names.index(package_name) if package_name in names else 0
+        with Spinner(f"Planting {package_name}..."):
+            try:
+                self.backend.install(packages)
+            except subprocess.CalledProcessError:
+                error(f"Failed to install {package_name}.")
+                return False
 
-        for i, (dep_name, dep_ver) in enumerate(resolved.items()):
-            if self.cache.is_installed(dep_name, dep_ver):
-                info(f"{dep_name} v{dep_ver} already blooms in the garden.")
-                continue
-
-            install_msg(f"{dep_name} v{dep_ver}")
-
-            pkg = self._find_package_meta(dep_name, dep_ver)
-            if not pkg:
-                error(f"Package {dep_name} v{dep_ver} not found in repositories.")
-                continue
-
-            bar = ProgressBar(3, prefix=f"Planting {dep_name}")
-            bar.update()
-
-            data = self._download_package(pkg)
-            bar.update()
-
-            if data:
-                self.cache.cache_package(dep_name, dep_ver, data)
-                self.cache.save_metadata(dep_name, dep_ver, {
-                    "version": dep_ver,
-                    "description": pkg.description,
-                    "author": pkg.author,
-                    "license": pkg.license,
-                    "dependencies": pkg.dependencies,
-                    "size": len(data),
-                })
-                self._extract_and_install(dep_name, dep_ver, data)
-                self.records.add(dep_name, dep_ver, pkg.files, pkg.dependencies)
-                bar.update()
-                bar.finish()
-                success(f"{dep_name} v{dep_ver} has bloomed.")
-
-            else:
-                bar.finish()
-                error(f"Failed to download {dep_name}.")
-
+        success(f"{package_name} has bloomed.")
+        self.history.add_entry("install", [{"name": package_name, "version": version}])
         done_msg()
         return True
 
-    def remove(self, package_name: str):
-        self.cache.ensure_dirs()
-        self.records.ensure_dirs()
+    def reinstall(self, package_name: str):
+        install_msg(f"{package_name} (replant)")
 
-        if not self.cache.is_installed(package_name):
-            warning(f"{package_name} is not blooming in the garden.")
+        if not confirm(f"Reinstall {package_name}?"):
             return False
 
-        deps = self.records.get(package_name, {}).get("dependencies", {})
+        with Spinner(f"Replanting {package_name}..."):
+            try:
+                self.backend.install([package_name], reinstall=True)
+            except subprocess.CalledProcessError:
+                error(f"Failed to reinstall {package_name}.")
+                return False
+
+        success(f"{package_name} has been replanted.")
+        self.history.add_entry("reinstall", [{"name": package_name}])
+        done_msg()
+        return True
+
+    def remove(self, package_name: str, record: bool = True):
         remove_msg(package_name)
 
+        if not confirm(f"Remove {package_name}?"):
+            return False
+
         with Spinner(f"Gathering petals of {package_name}..."):
-            inst_dir = os.path.join(self.config.install_dir, package_name)
-            if os.path.exists(inst_dir):
-                shutil.rmtree(inst_dir)
-            self.cache.remove_package(package_name)
-            self.records.remove(package_name)
+            try:
+                self.backend.remove([package_name])
+            except subprocess.CalledProcessError:
+                error(f"Failed to remove {package_name}.")
+                return False
 
         success(f"{package_name}'s petals have returned to the garden.")
+        if record:
+            self.history.add_entry("remove", [{"name": package_name}])
+        done_msg()
+        return True
+
+    def purge(self, package_name: str):
+        warning(f"Purging {package_name} (removes config files too)")
+
+        if not confirm(f"Purge {package_name}?"):
+            return False
+
+        with Spinner(f"Purging {package_name}..."):
+            try:
+                self.backend.purge([package_name])
+            except subprocess.CalledProcessError:
+                error(f"Failed to purge {package_name}.")
+                return False
+
+        success(f"{package_name} has been completely removed.")
+        self.history.add_entry("purge", [{"name": package_name}])
+        done_msg()
+        return True
+
+    def autoremove(self):
+        info("Checking for orphaned packages...")
+
+        if not confirm("Remove orphaned packages?"):
+            return False
+
+        with Spinner("Sweeping the garden..."):
+            try:
+                self.backend.autoremove()
+            except subprocess.CalledProcessError:
+                error("Failed to autoremove.")
+                return False
+
+        success("Orphaned petals have been swept away.")
+        self.history.add_entry("autoremove", [])
         done_msg()
         return True
 
     def update(self):
-        self.cache.ensure_dirs()
-        self.records.ensure_dirs()
-        self.repo_manager.load()
-
         update_msg()
+        info("Refreshing package lists...")
 
         with Spinner("Gathering fresh seeds..."):
-            self.repo_manager.fetch_all(use_cache=False)
+            try:
+                self.backend.update()
+            except subprocess.CalledProcessError:
+                error("Failed to update package lists.")
+                return False
 
-        installed = self.records.list_all()
-        if not installed:
-            info("No flowers planted yet. Plant some with 'wlpm install'.")
+        success("Package lists refreshed.")
+        done_msg()
+        return True
+
+    def upgrade(self):
+        info("Checking for upgradable packages...")
+
+        upgradable = self.backend.list_upgradable()
+        if not upgradable:
+            info("All flowers are at their full bloom.")
             return True
 
-        updated_count = 0
-        for name, data in installed.items():
-            current_ver = data.get("version", "")
-            for repo in self.repo_manager.repositories:
-                latest = repo.latest_version(name)
-                if latest and Version.parse(latest) > Version.parse(current_ver):
-                    info(f"Updating {name} v{current_ver} -> v{latest}")
-                    self.install(name, latest)
-                    updated_count += 1
-                    break
+        print()
+        info(f"Found {len(upgradable)} upgradable package(s):")
+        for pkg in upgradable:
+            line = f"  \u2022 {pkg['name']}"
+            if pkg.get("version"):
+                line += colorize(f"  {pkg['version']}", "crystal_dim")
+            print(line)
+        print()
 
-        if updated_count == 0:
-            info("All flowers are at their full bloom.")
-        else:
-            success(f"{updated_count} flower(s) have been refreshed.")
+        if not confirm("Water these flowers (upgrade)?"):
+            return False
 
+        with Spinner("Watering the garden..."):
+            try:
+                self.backend.upgrade()
+            except subprocess.CalledProcessError:
+                error("Upgrade failed.")
+                return False
+
+        success("Garden has been watered.")
+        self.history.add_entry("upgrade", [{"name": p["name"]} for p in upgradable])
+        done_msg()
+        return True
+
+    def full_upgrade(self):
+        info("Performing full garden renovation...")
+
+        if not confirm("Full upgrade?"):
+            return False
+
+        with Spinner("Renovating the garden..."):
+            try:
+                self.backend.full_upgrade()
+            except subprocess.CalledProcessError:
+                error("Full upgrade failed.")
+                return False
+
+        success("Full garden renovation complete.")
+        self.history.add_entry("full-upgrade", [])
         done_msg()
         return True
 
     def search(self, query: str):
-        self.repo_manager.load()
-        with Spinner("Searching the garden..."):
-            self.repo_manager.fetch_all()
-            results = self.repo_manager.search_all(query)
+        with Spinner(f"Searching for {query}..."):
+            output = self.backend.search(query)
 
-        if not results:
+        if not output or not output.strip():
             info(f"No flowers found matching '{query}'.")
             return
 
         print()
-        from wlpm.ui import search_result
-        for name, desc, ver in results:
-            search_result(name, desc, ver)
+        print(colorize(f"  Search results for '{query}':", "bold", "white"))
+        print()
+        for line in output.strip().split("\n"):
+            if line.strip():
+                print(f"  {colorize('\u2022', 'green')}  {colorize(line, 'silver')}")
+        print()
 
-    def list_packages(self):
-        installed = self.records.list_all()
-        if not installed:
-            info("No flowers planted yet. Plant some with 'wlpm install'.")
+    def show(self, package_name: str):
+        with Spinner(f"Looking up {package_name}..."):
+            output = self.backend.show(package_name)
+
+        if not output or "Unable to locate" in output or "No packages found" in output:
+            warning(f"No flower named '{package_name}' found.")
             return
 
         print()
-        from wlpm.ui import header_color, colorize, list_package
+        self._print_package_info(output)
+
+    def _print_package_info(self, output):
+        fields = {
+            "Package": ("white", True),
+            "Version": ("crystal", False),
+            "Essential": ("dim", False),
+            "Maintainer": ("silver", False),
+            "Installed-Size": ("crystal_dim", False),
+            "Depends": ("dim", False),
+            "Recommends": ("dim", False),
+            "Homepage": ("crystal_dim", False),
+            "Download-Size": ("crystal_dim", False),
+            "Description": ("silver", True),
+        }
+        for line in output.strip().split("\n"):
+            for field, (color, bold) in fields.items():
+                if line.startswith(f"{field}:"):
+                    label = colorize(f"  {field}:", color)
+                    if bold:
+                        label = colorize(f"  {field}:", "bold", color)
+                    value = line[len(field) + 1:].strip()
+                    print(f"{label} {colorize(value, 'silver')}")
+        print()
+
+    def list_packages(self):
+        with Spinner("Listing flowers..."):
+            packages = self.backend.list_installed()
+
+        if not packages:
+            info("No flowers planted yet.")
+            return
+
+        print()
         print(colorize("  Flowers blooming in the garden:", "bold", "white"))
         print()
-        for name, data in sorted(installed.items()):
-            list_package(name, data.get("version", "?"))
+        for pkg in sorted(packages, key=lambda x: x["name"]):
+            name = pkg["name"]
+            version = pkg.get("version", "")
+            status = pkg.get("status", "")
+            line = f"  {colorize('\u2022', 'green')}  {colorize(name, 'white')}"
+            if version:
+                line += colorize(f"  v{version}", "crystal_dim")
+            if status:
+                line += colorize(f"  [{status}]", "dim")
+            print(line)
+        print(f"  {colorize(f'Total: {len(packages)}', 'dim')}")
+
+    def list_upgradable(self):
+        with Spinner("Checking for upgrades..."):
+            packages = self.backend.list_upgradable()
+
+        if not packages:
+            info("All flowers are at their full bloom.")
+            return
+
         print()
+        print(colorize("  Upgradable flowers:", "bold", "white"))
+        print()
+        for pkg in packages:
+            line = f"  {colorize('\u2022', 'green')}  {colorize(pkg['name'], 'white')}"
+            if pkg.get("version"):
+                line += colorize(f"  {pkg['version']}", "crystal_dim")
+            print(line)
+        print(f"  {colorize(f'Total: {len(packages)}', 'dim')}")
 
     def info(self, package_name: str):
-        self.repo_manager.load()
-        with Spinner("Searching the garden..."):
-            self.repo_manager.fetch_all()
-            installed = self.records.get(package_name)
+        self.show(package_name)
 
-        repo_result = self.repo_manager.find_package(package_name)
-        from wlpm.ui import package_info
+    def show_history(self, limit: int = 20):
+        entries = self.history.list_history(limit)
+        if not entries:
+            info("The garden has no history yet.")
+            return
 
-        if repo_result:
-            _, versions = repo_result
-            latest_ver = sorted(versions.keys(), key=Version.parse)[-1]
-            latest_meta = versions[latest_ver]
-            package_info(
-                name=package_name,
-                version=latest_ver,
-                desc=latest_meta.description,
-                author=latest_meta.author,
-                license_=latest_meta.license,
-                deps=list(latest_meta.dependencies.keys()),
-                size=latest_meta.size,
-            )
-        elif installed:
-            package_info(
-                name=package_name,
-                version=installed.get("version", "?"),
-                desc=installed.get("description", ""),
-                author=installed.get("author", ""),
-                license_=installed.get("license", ""),
-                deps=list(installed.get("dependencies", {}).keys()),
-                size=installed.get("size", 0),
-            )
+        print()
+        print(colorize("  \u2740 Garden History \u2740", "green_bold"))
+        print()
+        for entry in entries:
+            eid = entry.get("id", "?")
+            action = entry.get("action", "?")
+            timestamp = entry.get("time", "")
+            status = entry.get("status", "completed")
+            pkgs = entry.get("packages", [])
+            names = ", ".join(p.get("name", "?") for p in pkgs)
+
+            status_tag = colorize("\u2713", "green") if status == "completed" else colorize("\u21A9", "yellow")
+            print(f"  {colorize(str(eid).rjust(3), 'silver')}  {status_tag}  "
+                  f"{colorize(action.ljust(12), 'crystal')}  "
+                  f"{colorize(names, 'white')}  "
+                  f"{colorize(timestamp, 'dim')}")
+        print()
+
+    def undo(self):
+        last = self.history.last_entry()
+        if not last:
+            info("Nothing to undo.")
+            return
+
+        action = last["action"]
+        packages = last["packages"]
+        info(f"Undoing {action} of {len(packages)} package(s)...")
+
+        if action in ("install", "upgrade", "reinstall"):
+            for pkg in packages:
+                name = pkg["name"]
+                with Spinner(f"Removing {name}..."):
+                    try:
+                        self.backend.remove([name])
+                    except subprocess.CalledProcessError:
+                        error(f"Failed to undo {name}.")
+                        continue
+                success(f"{name} has been returned to the earth.")
+        elif action in ("remove", "purge", "autoremove"):
+            warning("Cannot undo removal automatically. Reinstall with 'wlpm install'.")
+            return
         else:
-            warning(f"No flower named '{package_name}' found in the garden.")
+            warning(f"Cannot undo '{action}'.")
+            return
 
-    def _find_package_meta(self, name: str, version: str) -> PackageMetadata:
-        for repo in self.repo_manager.repositories:
-            meta = repo.get_version(name, version)
-            if meta:
-                return meta
-        return None
+        self.history.undo_last()
+        done_msg()
 
-    def _download_package(self, meta: PackageMetadata) -> bytes:
-        if not meta.download_url:
-            return self._generate_placeholder(meta)
-        try:
-            req = Request(
-                meta.download_url,
-                headers={"User-Agent": "WLPM/1.0 WhiteLilyPackageManager"},
-            )
-            with urlopen(req, timeout=30) as resp:
-                data = resp.read()
-                if meta.checksum:
-                    if not self.repo_manager.repositories[0].verify_checksum(data, meta.checksum):
-                        error(f"Checksum verification failed for {meta.name}")
-                        return b""
-                return data
-        except URLError as e:
-            error(f"Download failed: {e}")
-            return self._generate_placeholder(meta)
+    def clean(self):
+        if not confirm("Clean the package cache?"):
+            return False
 
-    def _generate_placeholder(self, meta: PackageMetadata) -> bytes:
-        pkg_data = json.dumps(meta.to_dict(), indent=2).encode("utf-8")
-        return pkg_data
+        with Spinner("Cleaning the garden..."):
+            try:
+                self.backend.clean()
+            except subprocess.CalledProcessError:
+                error("Failed to clean cache.")
+                return False
 
-    def _extract_and_install(self, name: str, version: str, data: bytes):
-        inst_dir = os.path.join(self.config.install_dir, name, version)
-        os.makedirs(inst_dir, exist_ok=True)
-        try:
-            pkg = json.loads(data.decode("utf-8"))
-            wlpkg_path = os.path.join(inst_dir, f"{name}.wlpkg")
-            with open(wlpkg_path, "w", encoding="utf-8") as f:
-                json.dump(pkg, f, indent=2, ensure_ascii=False)
-            files = pkg.get("files", [])
-            for fname in files:
-                fpath = os.path.join(inst_dir, fname)
-                os.makedirs(os.path.dirname(fpath), exist_ok=True)
-                if not os.path.exists(fpath):
-                    with open(fpath, "w") as f:
-                        f.write(f"# {name} - {fname}\n")
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            wlpkg_path = os.path.join(inst_dir, f"{name}.wlpkg")
-            with open(wlpkg_path, "wb") as f:
-                f.write(data)
+        success("Garden cleaned.")
+        done_msg()
+        return True
