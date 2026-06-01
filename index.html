@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base href="/">
+  <title>Huntrix OS Dashboard v1.0</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a1a;
+      --surface: rgba(255,255,255,0.05);
+      --card: rgba(255,255,255,0.08);
+      --text: #e0e0ff;
+      --text-muted: #8888aa;
+      --accent: #00f5ff;
+      --accent2: #ff00e5;
+      --border: rgba(255,255,255,0.1);
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --radius: 16px;
+      --sidebar-w: 240px;
+      --topbar-h: 56px;
+      font-size: 14px;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+    .glass { background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); }
+    .neon-text { color: var(--accent); text-shadow: 0 0 10px var(--accent), 0 0 40px var(--accent); }
+    .neon-border { border: 1px solid var(--accent); box-shadow: 0 0 10px var(--accent), inset 0 0 10px rgba(0,245,255,0.1); }
+    .widget { background: var(--card); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); backdrop-filter: blur(12px); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #0088ff); color: #000; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 20px var(--accent); }
+    .btn-danger { background: linear-gradient(135deg, #ff3355, #cc0022); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+    .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 0 20px #ff3355; }
+    input, textarea, select { background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; outline: none; transition: border 0.3s; width: 100%; font: inherit; }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(0,245,255,0.2); }
+
+    /* Loading Screen */
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg);
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+    #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    #loading-screen h1 { font-size: 4rem; letter-spacing: 0.3em; }
+    .loader { width: 50px; height: 50px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-top: 30px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-dots { display: flex; gap: 8px; margin-top: 16px; }
+    .loader-dots span { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; animation: dotPulse 1.2s ease-in-out infinite; }
+    .loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse { 0%,80%,100% { transform: scale(0.5); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+    /* Auth Pages */
+    #auth-container {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse at 30% 40%, rgba(0,245,255,0.08) 0%, transparent 60%), radial-gradient(ellipse at 70% 60%, rgba(255,0,229,0.06) 0%, transparent 60%);
+    }
+    #auth-container.hidden { display: none; }
+    .auth-box { width: 400px; padding: 40px; }
+    .auth-box h2 { font-size: 1.8rem; margin-bottom: 8px; }
+    .auth-box p { color: var(--text-muted); margin-bottom: 24px; }
+    .auth-form { display: flex; flex-direction: column; gap: 16px; }
+    .auth-form .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .auth-form .form-group label { font-size: 0.85rem; color: var(--text-muted); }
+    .auth-link { margin-top: 16px; text-align: center; color: var(--text-muted); }
+    .auth-link a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .auth-link a:hover { text-decoration: underline; }
+    .auth-page { display: none; }
+    .auth-page.active { display: block; }
+
+    /* App Shell */
+    #app { display: none; }
+    #app.active { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    #sidebar {
+      width: var(--sidebar-w); min-height: 100vh; position: fixed; left: 0; top: 0; z-index: 50;
+      display: flex; flex-direction: column; transition: transform 0.3s ease;
+      background: rgba(10,10,26,0.95); backdrop-filter: blur(20px); border-right: 1px solid var(--border);
+    }
+    #sidebar.collapsed { transform: translateX(-100%); }
+    .sidebar-brand { padding: 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+    .sidebar-brand .logo { font-size: 1.6rem; }
+    .sidebar-brand span { font-size: 1.1rem; font-weight: 700; }
+    .sidebar-nav { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px;
+      cursor: pointer; transition: all 0.2s; color: var(--text-muted); text-decoration: none; font-size: 0.9rem;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+    .nav-item.active { background: rgba(0,245,255,0.1); color: var(--accent); }
+    .nav-item .icon { font-size: 1.2rem; width: 24px; text-align: center; }
+    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .sidebar-footer .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; }
+    .sidebar-footer .user-info { flex: 1; }
+    .sidebar-footer .user-info .name { font-size: 0.85rem; }
+    .sidebar-footer .user-info .role { font-size: 0.75rem; color: var(--text-muted); }
+    .sidebar-footer .logout-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 4px; border-radius: 6px; transition: all 0.2s; }
+    .sidebar-footer .logout-btn:hover { color: #ff3355; background: rgba(255,51,85,0.1); }
+
+    /* Main Area */
+    #main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; transition: margin-left 0.3s ease; }
+    #main.expanded { margin-left: 0; }
+
+    /* Top Bar */
+    #topbar {
+      height: var(--topbar-h); display: flex; align-items: center; gap: 16px; padding: 0 24px;
+      background: rgba(10,10,26,0.8); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 40;
+    }
+    #topbar .hamburger { background: none; border: none; color: var(--text); font-size: 1.4rem; cursor: pointer; padding: 4px; display: none; }
+    #topbar .search-bar { flex: 1; max-width: 400px; position: relative; }
+    #topbar .search-bar input { padding-left: 36px; background: rgba(255,255,255,0.04); }
+    #topbar .search-bar .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+    .topbar-actions .theme-btn, .topbar-actions .notif-btn { background: rgba(255,255,255,0.06); border: none; color: var(--text); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: all 0.2s; position: relative; display: flex; align-items: center; justify-content: center; }
+    .topbar-actions .theme-btn:hover, .topbar-actions .notif-btn:hover { background: rgba(255,255,255,0.1); }
+    .notif-badge { position: absolute; top: -2px; right: -2px; background: #ff3355; color: #fff; font-size: 0.65rem; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+
+    /* Notification Dropdown */
+    #notif-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0; width: 360px; max-height: 400px; overflow-y: auto;
+      background: rgba(10,10,26,0.98); backdrop-filter: blur(20px); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; display: none; z-index: 60;
+    }
+    #notif-dropdown.open { display: block; }
+    #notif-dropdown .notif-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    #notif-dropdown .notif-header h4 { font-size: 0.9rem; }
+    #notif-dropdown .notif-header button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; }
+    .notif-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item .notif-icon { font-size: 1.1rem; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,245,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .notif-item .notif-content { flex: 1; }
+    .notif-item .notif-content p { font-size: 0.85rem; }
+    .notif-item .notif-content .time { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Content Pages */
+    #content { flex: 1; padding: 24px; overflow-y: auto; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .page > p { color: var(--text-muted); margin-bottom: 24px; }
+
+    /* Dashboard */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { padding: 20px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); }
+    .stat-card .stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .stat-card .stat-header .stat-icon { font-size: 1.5rem; }
+    .stat-card .stat-value { font-size: 1.8rem; font-weight: 700; }
+    .stat-card .stat-label { font-size: 0.8rem; color: var(--text-muted); }
+    .stat-card .stat-bar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .stat-card .stat-bar .fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.6s ease; }
+    .activity-list { list-style: none; }
+    .activity-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    .activity-list li:last-child { border-bottom: none; }
+    .activity-list .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; background: rgba(0,245,255,0.1); color: var(--accent); }
+    .status-badge.warning { background: rgba(255,200,0,0.1); color: #ffc800; }
+    .status-badge.error { background: rgba(255,51,85,0.1); color: #ff3355; }
+
+    /* WLPM */
+    .search-bar-lg { margin-bottom: 24px; position: relative; }
+    .search-bar-lg input { padding-left: 40px; height: 48px; font-size: 1rem; }
+    .search-bar-lg .s-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1.1rem; }
+    .pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .pkg-card { padding: 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+    .pkg-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .pkg-card .pkg-name { font-weight: 600; font-size: 0.95rem; }
+    .pkg-card .pkg-desc { font-size: 0.8rem; color: var(--text-muted); margin: 4px 0 8px; }
+    .pkg-card .pkg-ver { font-size: 0.75rem; color: var(--accent); }
+
+    /* CRK Hub */
+    .repo-list { display: flex; flex-direction: column; gap: 8px; }
+    .repo-item { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); }
+    .repo-item .repo-icon { font-size: 1.3rem; }
+    .repo-item .repo-info { flex: 1; }
+    .repo-item .repo-info .repo-name { font-weight: 600; }
+    .repo-item .repo-info .repo-meta { font-size: 0.8rem; color: var(--text-muted); }
+    .repo-item .repo-stars { color: #ffc800; font-size: 0.85rem; }
+
+    /* Huntrix AI */
+    .chat-container { display: flex; flex-direction: column; height: 500px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); overflow: hidden; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-msg { max-width: 80%; padding: 12px 16px; border-radius: 16px; font-size: 0.9rem; line-height: 1.4; }
+    .chat-msg.ai { align-self: flex-start; background: rgba(0,245,255,0.1); border-bottom-left-radius: 4px; }
+    .chat-msg.user { align-self: flex-end; background: rgba(255,0,229,0.1); border-bottom-right-radius: 4px; }
+    .chat-input-area { display: flex; gap: 8px; padding: 16px; border-top: 1px solid var(--border); }
+    .chat-input-area input { flex: 1; }
+    .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .quick-actions button { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+    .quick-actions button:hover { border-color: var(--accent); }
+
+    /* Dev Hub */
+    .dev-tools-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .dev-tool { padding: 20px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); text-align: center; cursor: pointer; transition: all 0.2s; }
+    .dev-tool:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .dev-tool .tool-icon { font-size: 2rem; margin-bottom: 8px; }
+    .dev-tool .tool-name { font-weight: 600; }
+    .dev-tool .tool-desc { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* Cloud Center */
+    .storage-bar { height: 12px; background: rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden; margin: 8px 0 16px; }
+    .storage-bar .fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), #0088ff); transition: width 0.6s ease; }
+    .file-list { display: flex; flex-direction: column; gap: 6px; }
+    .file-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+    .file-item .file-icon { font-size: 1.2rem; }
+    .file-item .file-info { flex: 1; }
+    .file-item .file-info .file-name { font-size: 0.9rem; }
+    .file-item .file-info .file-size { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Media Center */
+    .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .media-item { aspect-ratio: 1; border-radius: 12px; background: var(--card); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: all 0.2s; font-size: 2rem; }
+    .media-item:hover { border-color: var(--accent); }
+    .media-item span { font-size: 0.8rem; color: var(--text-muted); }
+    .player-controls { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); }
+    .player-controls button { background: none; border: none; color: var(--text); font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
+
+    /* Browser */
+    .browser-window { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+    .browser-nav { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--card); }
+    .browser-nav button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 4px; }
+    .browser-nav .url-bar { flex: 1; }
+    .browser-nav .url-bar input { font-size: 0.85rem; padding: 6px 12px; }
+    .browser-tabs { display: flex; gap: 2px; padding: 0 14px; background: rgba(255,255,255,0.02); }
+    .browser-tab { padding: 8px 16px; font-size: 0.8rem; cursor: pointer; border-top-left-radius: 8px; border-top-right-radius: 8px; background: transparent; color: var(--text-muted); }
+    .browser-tab.active { background: var(--card); color: var(--text); }
+    .browser-content { padding: 20px; min-height: 300px; background: var(--card); }
+    .bookmarks { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .bookmarks a { color: var(--accent); text-decoration: none; font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; background: rgba(0,245,255,0.05); }
+
+    /* Productivity */
+    .todo-list { display: flex; flex-direction: column; gap: 6px; }
+    .todo-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+    .todo-item input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
+    .todo-item .todo-text { flex: 1; font-size: 0.9rem; }
+    .todo-item .todo-text.done { text-decoration: line-through; color: var(--text-muted); }
+    .todo-item .todo-tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: rgba(0,245,255,0.1); color: var(--accent); }
+    .pomodoro { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 30px; }
+    .pomodoro .timer { font-size: 3.5rem; font-weight: 300; letter-spacing: 0.05em; font-variant-numeric: tabular-nums; }
+    .pomodoro .controls { display: flex; gap: 12px; }
+
+    /* Analytics */
+    .chart-placeholder { height: 200px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+    .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+    .analytics-stat { text-align: center; padding: 16px; }
+    .analytics-stat .num { font-size: 1.6rem; font-weight: 700; }
+    .analytics-stat .lbl { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* Settings */
+    .settings-section { margin-bottom: 24px; }
+    .settings-section h3 { font-size: 1rem; margin-bottom: 12px; color: var(--accent); }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-row .setting-label { font-size: 0.9rem; }
+    .setting-row .setting-desc { font-size: 0.8rem; color: var(--text-muted); }
+    .toggle-switch { width: 44px; height: 24px; background: rgba(255,255,255,0.1); border-radius: 12px; cursor: pointer; position: relative; transition: all 0.3s; }
+    .toggle-switch.on { background: var(--accent); }
+    .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: transform 0.3s; }
+    .toggle-switch.on::after { transform: translateX(20px); }
+    .color-picker { display: flex; gap: 8px; }
+    .color-picker .cp { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; }
+    .color-picker .cp.active { border-color: #fff; transform: scale(1.15); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .full-width { grid-column: 1 / -1; }
+    .mt-16 { margin-top: 16px; }
+    .mb-16 { margin-bottom: 16px; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .gap-8 { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #main { margin-left: 0; }
+      #topbar .hamburger { display: block; }
+      #content { padding: 16px; }
+      .two-col { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .auth-box { width: 90%; padding: 24px; }
+      #loading-screen h1 { font-size: 2.5rem; }
+    }
+    @media (max-width: 480px) {
+      .stat-grid { grid-template-columns: 1fr; }
+      #notif-dropdown { width: calc(100vw - 32px); right: -12px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen" aria-label="Loading">
+    <h1 class="neon-text">HUNTRIX OS</h1>
+    <div class="loader" role="status" aria-label="Loading spinner"></div>
+    <div class="loader-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+
+  <!-- Auth Container -->
+  <div id="auth-container" aria-label="Authentication">
+    <div class="auth-box glass neon-border">
+      <!-- Login -->
+      <div class="auth-page active" id="auth-login">
+        <h2 class="neon-text">Welcome Back</h2>
+        <p>Sign in to your Huntrix OS account</p>
+        <form class="auth-form" id="login-form" autocomplete="off">
+          <div class="form-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" placeholder="Enter username" aria-label="Username" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter password" aria-label="Password" required>
+          </div>
+          <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+        <div class="auth-link">Don't have an account? <a id="show-register">Create Account</a></div>
+      </div>
+      <!-- Register -->
+      <div class="auth-page" id="auth-register">
+        <h2 class="neon-text">Create Account</h2>
+        <p>Join the Huntrix ecosystem</p>
+        <form class="auth-form" id="register-form" autocomplete="off">
+          <div class="form-group">
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" placeholder="Choose username" aria-label="New username" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="Create password" aria-label="New password" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-confirm">Confirm Password</label>
+            <input type="password" id="reg-confirm" placeholder="Confirm password" aria-label="Confirm password" required>
+          </div>
+          <button type="submit" class="btn-primary">Register</button>
+        </form>
+        <div class="auth-link">Already have an account? <a id="show-login">Sign In</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div id="app" aria-label="Dashboard application">
+    <!-- Sidebar -->
+    <nav id="sidebar" class="glass" aria-label="Main navigation">
+      <div class="sidebar-brand">
+        <span class="logo neon-text">⬡</span>
+        <span class="neon-text">HUNTRIX</span>
+      </div>
+      <div class="sidebar-nav">
+        <a class="nav-item active" data-page="dashboard" href="#dashboard" aria-label="Dashboard"><span class="icon">⌂</span> Dashboard</a>
+        <a class="nav-item" data-page="wlpm" href="#wlpm" aria-label="WLPM"><span class="icon">◈</span> WLPM</a>
+        <a class="nav-item" data-page="crk-hub" href="#crk-hub" aria-label="CRK Hub"><span class="icon">⎔</span> CRK Hub</a>
+        <a class="nav-item" data-page="huntrix-ai" href="#huntrix-ai" aria-label="Huntrix AI"><span class="icon">✦</span> Huntrix AI</a>
+        <a class="nav-item" data-page="developer-hub" href="#developer-hub" aria-label="Developer Hub"><span class="icon">⚙</span> Developer Hub</a>
+        <a class="nav-item" data-page="cloud-center" href="#cloud-center" aria-label="Cloud Center"><span class="icon">☁</span> Cloud Center</a>
+        <a class="nav-item" data-page="media-center" href="#media-center" aria-label="Media Center"><span class="icon">▶</span> Media Center</a>
+        <a class="nav-item" data-page="browser" href="#browser" aria-label="Browser"><span class="icon">🌐</span> Browser</a>
+        <a class="nav-item" data-page="productivity" href="#productivity" aria-label="Productivity"><span class="icon">✓</span> Productivity</a>
+        <a class="nav-item" data-page="analytics" href="#analytics" aria-label="Analytics"><span class="icon">📊</span> Analytics</a>
+        <a class="nav-item" data-page="settings" href="#settings" aria-label="Settings"><span class="icon">⚡</span> Settings</a>
+      </div>
+      <div class="sidebar-footer">
+        <div class="avatar" id="user-avatar">U</div>
+        <div class="user-info">
+          <div class="name" id="user-name">User</div>
+          <div class="role">Administrator</div>
+        </div>
+        <button class="logout-btn" id="logout-btn" aria-label="Logout" title="Logout">⏻</button>
+      </div>
+    </nav>
+
+    <!-- Main Area -->
+    <div id="main">
+      <!-- Top Bar -->
+      <header id="topbar" aria-label="Top bar">
+        <button class="hamburger" id="hamburger-btn" aria-label="Toggle sidebar">☰</button>
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Search Huntrix OS..." aria-label="Global search">
+        </div>
+        <div class="topbar-actions">
+          <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+          <div style="position:relative">
+            <button class="notif-btn" id="notif-btn" aria-label="Notifications">🔔<span class="notif-badge" id="notif-count">3</span></button>
+            <div id="notif-dropdown" aria-label="Notifications dropdown">
+              <div class="notif-header">
+                <h4>Notifications</h4>
+                <button id="mark-all-read">Mark all read</button>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon">✓</div>
+                <div class="notif-content">
+                  <p>System update completed successfully</p>
+                  <div class="time">2 min ago</div>
+                </div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon">⚠</div>
+                <div class="notif-content">
+                  <p>CPU temperature reached 78°C</p>
+                  <div class="time">15 min ago</div>
+                </div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon">▼</div>
+                <div class="notif-content">
+                  <p>New package available: huntrix-core v2.1</p>
+                  <div class="time">1 hour ago</div>
+                </div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon">✦</div>
+                <div class="notif-content">
+                  <p>AI model update: Neural Nexus v4.0 ready</p>
+                  <div class="time">3 hours ago</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content Pages -->
+      <main id="content">
+        <!-- Dashboard -->
+        <section class="page active" id="page-dashboard" aria-label="Dashboard">
+          <h1>Dashboard</h1>
+          <p>Welcome back, <span id="dash-user">User</span>. All systems nominal.</p>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="stat-header"><span class="stat-label">CPU</span><span class="stat-icon">⚡</span></div><div class="stat-value" id="cpu-val">32%</div><div class="stat-bar"><div class="fill" style="width:32%"></div></div></div>
+            <div class="stat-card"><div class="stat-header"><span class="stat-label">RAM</span><span class="stat-icon">▦</span></div><div class="stat-value" id="ram-val">6.2 GB</div><div class="stat-bar"><div class="fill" style="width:62%"></div></div></div>
+            <div class="stat-card"><div class="stat-header"><span class="stat-label">Storage</span><span class="stat-icon">💾</span></div><div class="stat-value" id="storage-val">234 GB</div><div class="stat-bar"><div class="fill" style="width:47%"></div></div></div>
+            <div class="stat-card"><div class="stat-header"><span class="stat-label">Network</span><span class="stat-icon">📶</span></div><div class="stat-value" id="net-val">847 Mbps</div><div class="stat-bar"><div class="fill" style="width:85%"></div></div></div>
+          </div>
+          <div class="two-col">
+            <div class="widget">
+              <div class="section-title">📋 Recent Activity</div>
+              <ul class="activity-list">
+                <li><span class="dot"></span> Deployed project "Nexus Core" to production</li>
+                <li><span class="dot"></span> White Lily package "huntrix-ai" installed</li>
+                <li><span class="dot"></span> Cloud backup completed — 2.4 GB synced</li>
+                <li><span class="dot"></span> Firewall rules updated for WAN interface</li>
+                <li><span class="dot"></span> System health check passed all 12 tests</li>
+              </ul>
+            </div>
+            <div class="widget">
+              <div class="section-title">🟢 System Status</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div class="flex items-center justify-between"><span>Security Shield</span><span class="status-badge">● Active</span></div>
+                <div class="flex items-center justify-between"><span>AI Engine</span><span class="status-badge">● Online</span></div>
+                <div class="flex items-center justify-between"><span>Cloud Sync</span><span class="status-badge">● Synced</span></div>
+                <div class="flex items-center justify-between"><span>Database Cluster</span><span class="status-badge">● Operational</span></div>
+                <div class="flex items-center justify-between"><span>VPN Tunnel</span><span class="status-badge warning">● Degraded</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- WLPM -->
+        <section class="page" id="page-wlpm" aria-label="WLPM">
+          <h1>◈ White Lily Package Manager</h1>
+          <p>Discover and install packages for your Huntrix OS environment.</p>
+          <div class="search-bar-lg"><span class="s-icon">🔍</span><input type="text" placeholder="Search packages..." aria-label="Search packages"></div>
+          <div class="section-title">⭐ Featured Packages</div>
+          <div class="pkg-grid">
+            <div class="pkg-card"><div class="pkg-name">huntrix-ai-core</div><div class="pkg-desc">Neural network engine for AI tasks</div><div class="pkg-ver">v4.2.1</div></div>
+            <div class="pkg-card"><div class="pkg-name">nexus-shell</div><div class="pkg-desc">Next-gen terminal emulator</div><div class="pkg-ver">v2.0.0</div></div>
+            <div class="pkg-card"><div class="pkg-name">cipher-guard</div><div class="pkg-desc">End-to-end encryption toolkit</div><div class="pkg-ver">v1.8.3</div></div>
+            <div class="pkg-card"><div class="pkg-name">quantum-vfs</div><div class="pkg-desc">Virtual file system layer</div><div class="pkg-ver">v3.1.0</div></div>
+            <div class="pkg-card"><div class="pkg-name">lily-ui</div><div class="pkg-desc">UI component library</div><div class="pkg-ver">v5.0.2</div></div>
+            <div class="pkg-card"><div class="pkg-name">hyper-vault</div><div class="pkg-desc">Secure credential storage</div><div class="pkg-ver">v2.3.1</div></div>
+          </div>
+          <div class="section-title">📦 Installed Packages</div>
+          <div class="pkg-grid">
+            <div class="pkg-card"><div class="pkg-name">huntrix-base</div><div class="pkg-desc">Core OS foundation layer</div><div class="pkg-ver">v1.0.5</div></div>
+            <div class="pkg-card"><div class="pkg-name">network-mesh</div><div class="pkg-desc">Distributed networking stack</div><div class="pkg-ver">v0.9.8</div></div>
+            <div class="pkg-card"><div class="pkg-name">crypto-modules</div><div class="pkg-desc">Cryptographic primitives</div><div class="pkg-ver">v2.1.2</div></div>
+          </div>
+        </section>
+
+        <!-- CRK Hub -->
+        <section class="page" id="page-crk-hub" aria-label="CRK Hub">
+          <h1>⎔ Code Repository Kit</h1>
+          <p>Browse, search, and manage your code repositories.</p>
+          <div class="search-bar-lg"><span class="s-icon">🔍</span><input type="text" placeholder="Search repositories..." aria-label="Search repositories"></div>
+          <div class="two-col">
+            <div>
+              <div class="section-title">🔥 Trending Repositories</div>
+              <div class="repo-list">
+                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">huntrix/neural-core</div><div class="repo-meta">Updated 2h ago • MIT</div></div><span class="repo-stars">★ 342</span></div>
+                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">lily-os/package-registry</div><div class="repo-meta">Updated 5h ago • Apache 2.0</div></div><span class="repo-stars">★ 218</span></div>
+                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">cyber-core/quantum-shield</div><div class="repo-meta">Updated 1d ago • GPL 3.0</div></div><span class="repo-stars">★ 189</span></div>
+                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">nexus-dev/vault-proto</div><div class="repo-meta">Updated 2d ago • MIT</div></div><span class="repo-stars">★ 156</span></div>
+                <div class="repo-item"><span class="repo-icon">📁</span><div class="repo-info"><div class="repo-name">huntrix/ui-kit</div><div class="repo-meta">Updated 3d ago • MIT</div></div><span class="repo-stars">★ 94</span></div>
+              </div>
+            </div>
+            <div>
+              <div class="section-title">➕ New Repository</div>
+              <form style="display:flex;flex-direction:column;gap:12px" id="new-repo-form">
+                <input type="text" placeholder="Repository name" aria-label="Repository name">
+                <textarea rows="3" placeholder="Description (optional)" aria-label="Repository description"></textarea>
+                <select aria-label="Visibility"><option>Public</option><option>Private</option></select>
+                <button class="btn-primary" type="submit">Create Repository</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- Huntrix AI -->
+        <section class="page" id="page-huntrix-ai" aria-label="Huntrix AI">
+          <h1>✦ Huntrix AI Assistant</h1>
+          <p>Your intelligent AI co-pilot for Huntrix OS.</p>
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg ai">Hello! I'm your Huntrix AI assistant. How can I help you today?</div>
+              <div class="chat-msg user">Show me the system status</div>
+              <div class="chat-msg ai">All systems are operational. CPU: 32%, RAM: 6.2 GB used, Storage: 234 GB free, Network: 847 Mbps. Any specific task you'd like to perform?</div>
+            </div>
+            <div class="chat-input-area">
+              <input type="text" id="chat-input" placeholder="Message Huntrix AI..." aria-label="Chat input">
+              <button class="btn-primary" id="chat-send">Send</button>
+            </div>
+          </div>
+          <div class="quick-actions">
+            <button onclick="addChatMsg('ai','Running full system diagnostic...')">🔍 Run Diagnostic</button>
+            <button onclick="addChatMsg('ai','Optimizing system performance...')">⚡ Optimize System</button>
+            <button onclick="addChatMsg('ai','Scanning for vulnerabilities...')">🛡 Security Scan</button>
+            <button onclick="addChatMsg('ai','Cleaning temporary files...')">🧹 Clean Cache</button>
+          </div>
+        </section>
+
+        <!-- Developer Hub -->
+        <section class="page" id="page-developer-hub" aria-label="Developer Hub">
+          <h1>⚙ Developer Hub</h1>
+          <p>Your development command center.</p>
+          <div class="dev-tools-grid">
+            <div class="dev-tool"><div class="tool-icon">📝</div><div class="tool-name">Code Editor</div><div class="tool-desc">Multi-language IDE with syntax highlighting</div></div>
+            <div class="dev-tool"><div class="tool-icon">⊞</div><div class="tool-name">Terminal</div><div class="tool-desc">Integrated shell with tabs and themes</div></div>
+            <div class="dev-tool"><div class="tool-icon">◎</div><div class="tool-name">Debugger</div><div class="tool-desc">Step-through code analysis tool</div></div>
+            <div class="dev-tool"><div class="tool-icon">⇄</div><div class="tool-name">API Tester</div><div class="tool-desc">REST/GraphQL endpoint testing</div></div>
+          </div>
+          <div class="widget">
+            <div class="section-title">📁 Recent Projects</div>
+            <div class="repo-list">
+              <div class="repo-item"><span class="repo-icon">📂</span><div class="repo-info"><div class="repo-name">neural-nexus-engine</div><div class="repo-meta">Modified 30m ago • Python</div></div></div>
+              <div class="repo-item"><span class="repo-icon">📂</span><div class="repo-info"><div class="repo-name">huntrix-dashboard-ui</div><div class="repo-meta">Modified 2h ago • JavaScript</div></div></div>
+              <div class="repo-item"><span class="repo-icon">📂</span><div class="repo-info"><div class="repo-name">quantum-vfs-driver</div><div class="repo-meta">Modified 1d ago • Rust</div></div></div>
+              <div class="repo-item"><span class="repo-icon">📂</span><div class="repo-info"><div class="repo-name">lily-package-manager</div><div class="repo-meta">Modified 3d ago • Go</div></div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Cloud Center -->
+        <section class="page" id="page-cloud-center" aria-label="Cloud Center">
+          <h1>☁ Cloud Center</h1>
+          <p>Manage your cloud storage and files.</p>
+          <div class="widget mb-16">
+            <div class="flex items-center justify-between">
+              <span class="section-title" style="margin:0">💾 Storage Overview</span>
+              <span>234 GB / 500 GB</span>
+            </div>
+            <div class="storage-bar"><div class="fill" style="width:47%"></div></div>
+            <p style="font-size:0.85rem;color:var(--text-muted)">47% used — 266 GB remaining</p>
+          </div>
+          <div class="flex items-center justify-between mb-16">
+            <div class="section-title" style="margin:0">📄 Files</div>
+            <button class="btn-primary">+ Upload</button>
+          </div>
+          <div class="file-list">
+            <div class="file-item"><span class="file-icon">📄</span><div class="file-info"><div class="file-name">project-report-q2.pdf</div><div class="file-size">2.4 MB • Modified 2h ago</div></div></div>
+            <div class="file-item"><span class="file-icon">🖼</span><div class="file-info"><div class="file-name">screenshot-dashboard.png</div><div class="file-size">1.1 MB • Modified 5h ago</div></div></div>
+            <div class="file-item"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">backup-nexus-core</div><div class="file-size">128 MB • Modified 1d ago</div></div></div>
+            <div class="file-item"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">media-assets</div><div class="file-size">890 MB • Modified 3d ago</div></div></div>
+            <div class="file-item"><span class="file-icon">📄</span><div class="file-info"><div class="file-name">config.yaml</div><div class="file-size">12 KB • Modified 1 week ago</div></div></div>
+          </div>
+        </section>
+
+        <!-- Media Center -->
+        <section class="page" id="page-media-center" aria-label="Media Center">
+          <h1>▶ Media Center</h1>
+          <p>Browse and play your media library.</p>
+          <div class="section-title">🖼 Images</div>
+          <div class="media-grid">
+            <div class="media-item">🌄<span>Sunset Ridge</span></div>
+            <div class="media-item">🏙<span>City Lights</span></div>
+            <div class="media-item">🌊<span>Ocean View</span></div>
+            <div class="media-item">🌲<span>Forest Path</span></div>
+          </div>
+          <div class="section-title">🎬 Videos</div>
+          <div class="media-grid">
+            <div class="media-item">🎥<span>Demo Reel 2026</span></div>
+            <div class="media-item">🎥<span>Tutorial — WLPM</span></div>
+            <div class="media-item">🎥<span>System Walkthrough</span></div>
+          </div>
+          <div class="section-title">🎵 Music</div>
+          <div class="media-grid">
+            <div class="media-item">🎵<span>Ambient Works</span></div>
+            <div class="media-item">🎵<span>Synthwave Vol 2</span></div>
+            <div class="media-item">🎵<span>Neural Beats</span></div>
+          </div>
+          <div class="section-title">🎛 Player</div>
+          <div class="player-controls">
+            <button>⏮</button>
+            <button>▶</button>
+            <button>⏭</button>
+            <span style="flex:1;text-align:center;font-size:0.85rem;color:var(--text-muted)">No track selected</span>
+            <button>🔀</button>
+            <button>🔁</button>
+            <button>🔊</button>
+          </div>
+        </section>
+
+        <!-- Browser -->
+        <section class="page" id="page-browser" aria-label="Browser">
+          <h1>🌐 Web Browser</h1>
+          <p>Browse the web with the integrated Huntrix browser.</p>
+          <div class="browser-window">
+            <div class="browser-tabs">
+              <div class="browser-tab active">📄 New Tab</div>
+              <div class="browser-tab">Huntrix Docs</div>
+              <div class="browser-tab">➕</div>
+            </div>
+            <div class="browser-nav">
+              <button>◀</button><button>▶</button><button>↻</button>
+              <div class="url-bar"><input type="text" value="https://huntrix.io/start" aria-label="URL bar"></div>
+              <button>⭐</button><button>⋮</button>
+            </div>
+            <div class="browser-content">
+              <p style="color:var(--text-muted);margin-bottom:12px">Start page — Huntrix Browser v1.0</p>
+              <div class="bookmarks">
+                <a href="#">Huntrix AI</a><a href="#">GitHub</a><a href="#">WLPM Registry</a><a href="#">Dev Docs</a><a href="#">Cloud Dashboard</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Productivity -->
+        <section class="page" id="page-productivity" aria-label="Productivity">
+          <h1>✓ Productivity Suite</h1>
+          <p>Notes, tasks, calendar, and focus tools.</p>
+          <div class="two-col">
+            <div class="widget">
+              <div class="section-title">📝 Notes</div>
+              <textarea rows="4" placeholder="Write a quick note..." aria-label="Notes" style="margin-bottom:8px"></textarea>
+              <button class="btn-primary" style="width:100%">Save Note</button>
+            </div>
+            <div class="widget">
+              <div class="section-title">✅ Tasks</div>
+              <div class="todo-list">
+                <div class="todo-item"><input type="checkbox"><span class="todo-text">Review system architecture</span><span class="todo-tag">Work</span></div>
+                <div class="todo-item"><input type="checkbox"><span class="todo-text">Update WLPM packages</span><span class="todo-tag">Dev</span></div>
+                <div class="todo-item"><input type="checkbox"><span class="todo-text">Backup cloud storage</span><span class="todo-tag">Sys</span></div>
+                <div class="todo-item"><input type="checkbox" checked><span class="todo-text done">Configure firewall rules</span><span class="todo-tag">Sec</span></div>
+                <div class="todo-item"><input type="checkbox"><span class="todo-text">Write API documentation</span><span class="todo-tag">Docs</span></div>
+              </div>
+              <div class="flex gap-8 mt-16">
+                <input type="text" placeholder="New task..." aria-label="New task" style="flex:1">
+                <button class="btn-primary">Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="two-col mt-16">
+            <div class="widget">
+              <div class="section-title">📅 Calendar</div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:0.8rem">
+                <span style="color:var(--text-muted)">Mo</span><span style="color:var(--text-muted)">Tu</span><span style="color:var(--text-muted)">We</span><span style="color:var(--text-muted)">Th</span><span style="color:var(--text-muted)">Fr</span><span style="color:var(--text-muted)">Sa</span><span style="color:var(--text-muted)">Su</span>
+                <span>25</span><span>26</span><span>27</span><span>28</span><span>29</span><span>30</span><span>31</span>
+                <span>1</span><span>2</span><span>3</span><span style="color:var(--accent);font-weight:700;background:rgba(0,245,255,0.1);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:auto">4</span><span>5</span><span>6</span><span>7</span>
+                <span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
+                <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+                <span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span><span>28</span>
+                <span>29</span><span>30</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+              </div>
+            </div>
+            <div class="widget pomodoro">
+              <div class="section-title">🍅 Pomodoro Timer</div>
+              <div class="timer neon-text" id="pomodoro-timer">25:00</div>
+              <div class="controls">
+                <button class="btn-primary" id="pomodoro-start">Start</button>
+                <button class="btn-danger" id="pomodoro-reset">Reset</button>
+              </div>
+              <p style="font-size:0.8rem;color:var(--text-muted)">Focus session: 25 min</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Analytics -->
+        <section class="page" id="page-analytics" aria-label="Analytics">
+          <h1>📊 Analytics</h1>
+          <p>System metrics and performance overview.</p>
+          <div class="analytics-grid">
+            <div class="widget analytics-stat"><div class="num neon-text">847</div><div class="lbl">Req/s</div></div>
+            <div class="widget analytics-stat"><div class="num neon-text">99.6</div><div class="lbl">Uptime %</div></div>
+            <div class="widget analytics-stat"><div class="num neon-text">12</div><div class="lbl">Active Services</div></div>
+            <div class="widget analytics-stat"><div class="num neon-text">2.4</div><div class="lbl">Avg Latency (ms)</div></div>
+          </div>
+          <div class="two-col">
+            <div class="widget">
+              <div class="section-title">📈 CPU Usage (Last 24h)</div>
+              <div class="chart-placeholder">[Line Chart — CPU % over time]</div>
+            </div>
+            <div class="widget">
+              <div class="section-title">📊 Memory Allocation</div>
+              <div class="chart-placeholder">[Pie Chart — RAM distribution]</div>
+            </div>
+          </div>
+          <div class="widget mt-16">
+            <div class="section-title">🌐 Network Traffic</div>
+            <div class="chart-placeholder">[Area Chart — Inbound / Outbound]</div>
+          </div>
+          <div style="margin-top:16px;text-align:right">
+            <button class="btn-primary">⬇ Export Data</button>
+          </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="page" id="page-settings" aria-label="Settings">
+          <h1>⚡ Settings</h1>
+          <p>Customize your Huntrix OS experience.</p>
+          <div class="settings-section">
+            <h3>👤 Profile</h3>
+            <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Your public profile name</div></div><input type="text" value="Admin User" style="width:200px" aria-label="Display name"></div>
+            <div class="setting-row"><div><div class="setting-label">Email</div><div class="setting-desc">Notification email address</div></div><input type="email" value="admin@huntrix.io" style="width:200px" aria-label="Email"></div>
+          </div>
+          <div class="settings-section">
+            <h3>🎨 Appearance</h3>
+            <div class="setting-row"><div><div class="setting-label">Dark Mode</div><div class="setting-desc">Toggle dark/light theme</div></div><div class="toggle-switch on" id="dark-mode-toggle" role="button" tabindex="0" aria-label="Toggle dark mode"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Accent Color</div><div class="setting-desc">Choose your accent color</div></div><div class="color-picker"><div class="cp active" style="background:#00f5ff" data-color="#00f5ff" role="button" tabindex="0" aria-label="Cyan accent"></div><div class="cp" style="background:#ff00e5" data-color="#ff00e5" role="button" tabindex="0" aria-label="Pink accent"></div><div class="cp" style="background:#00ff88" data-color="#00ff88" role="button" tabindex="0" aria-label="Green accent"></div><div class="cp" style="background:#ff8800" data-color="#ff8800" role="button" tabindex="0" aria-label="Orange accent"></div><div class="cp" style="background:#8855ff" data-color="#8855ff" role="button" tabindex="0" aria-label="Purple accent"></div></div></div>
+          </div>
+          <div class="settings-section">
+            <h3>🔔 Notifications</h3>
+            <div class="setting-row"><div><div class="setting-label">System Notifications</div><div class="setting-desc">Receive system alerts</div></div><div class="toggle-switch on" role="button" tabindex="0" aria-label="Toggle system notifications"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Update Notifications</div><div class="setting-desc">Package and OS updates</div></div><div class="toggle-switch on" role="button" tabindex="0" aria-label="Toggle update notifications"></div></div>
+            <div class="setting-row"><div><div class="setting-label">AI Suggestions</div><div class="setting-desc">Proactive AI recommendations</div></div><div class="toggle-switch" role="button" tabindex="0" aria-label="Toggle AI suggestions"></div></div>
+          </div>
+          <div class="settings-section">
+            <h3>ℹ About</h3>
+            <div class="widget">
+              <p><strong>Huntrix OS Dashboard</strong> v1.0</p>
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-top:4px">© 2026 Huntrix Systems. All rights reserved.</p>
+              <p style="color:var(--text-muted);font-size:0.85rem">Build 2026.06.01 — Kernel HX-7.2</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var stored = localStorage.getItem('huntrix_user');
+
+      function showAuth() {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('auth-container').classList.remove('hidden');
+        document.getElementById('app').classList.remove('active');
+      }
+
+      function showApp(username) {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('auth-container').classList.add('hidden');
+        document.getElementById('app').classList.add('active');
+        if (username) {
+          document.getElementById('dash-user').textContent = username;
+          document.getElementById('user-name').textContent = username;
+          document.getElementById('user-avatar').textContent = username.charAt(0).toUpperCase();
+        }
+      }
+
+      // Loading screen timeout
+      setTimeout(function() {
+        if (stored) {
+          showApp(stored);
+        } else {
+          showAuth();
+        }
+      }, 2000);
+
+      // Auth toggle
+      document.getElementById('show-register').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('auth-login').classList.remove('active');
+        document.getElementById('auth-register').classList.add('active');
+      });
+      document.getElementById('show-login').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('auth-register').classList.remove('active');
+        document.getElementById('auth-login').classList.add('active');
+      });
+
+      // Login
+      document.getElementById('login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var username = document.getElementById('login-username').value.trim();
+        if (username) {
+          localStorage.setItem('huntrix_user', username);
+          showApp(username);
+        }
+      });
+
+      // Register
+      document.getElementById('register-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var username = document.getElementById('reg-username').value.trim();
+        var pw = document.getElementById('reg-password').value;
+        var confirm = document.getElementById('reg-confirm').value;
+        if (username && pw && pw === confirm) {
+          localStorage.setItem('huntrix_user', username);
+          showApp(username);
+        } else if (pw !== confirm) {
+          alert('Passwords do not match.');
+        }
+      });
+
+      // Logout
+      document.getElementById('logout-btn').addEventListener('click', function() {
+        localStorage.removeItem('huntrix_user');
+        document.getElementById('app').classList.remove('active');
+        document.getElementById('auth-container').classList.remove('hidden');
+        document.getElementById('auth-login').classList.add('active');
+        document.getElementById('auth-register').classList.remove('active');
+        document.getElementById('login-username').value = '';
+        document.getElementById('login-password').value = '';
+        stored = null;
+      });
+
+      // Navigation
+      var navItems = document.querySelectorAll('.nav-item');
+      var pages = document.querySelectorAll('.page');
+      navItems.forEach(function(item) {
+        item.addEventListener('click', function(e) {
+          e.preventDefault();
+          var pageId = this.getAttribute('data-page');
+          navItems.forEach(function(n) { n.classList.remove('active'); });
+          this.classList.add('active');
+          pages.forEach(function(p) { p.classList.remove('active'); });
+          var target = document.getElementById('page-' + pageId);
+          if (target) target.classList.add('active');
+          // Close sidebar on mobile
+          if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('open');
+          }
+        });
+      });
+
+      // Hamburger
+      document.getElementById('hamburger-btn').addEventListener('click', function() {
+        document.getElementById('sidebar').classList.toggle('open');
+      });
+
+      // Notifications
+      document.getElementById('notif-btn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('notif-dropdown').classList.toggle('open');
+      });
+      document.addEventListener('click', function() {
+        document.getElementById('notif-dropdown').classList.remove('open');
+      });
+      document.getElementById('mark-all-read').addEventListener('click', function() {
+        document.getElementById('notif-count').textContent = '0';
+      });
+
+      // Theme toggle (topbar)
+      document.getElementById('theme-toggle').addEventListener('click', function() {
+        var root = document.documentElement;
+        var bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+        if (bg === '#0a0a1a') {
+          root.style.setProperty('--bg', '#f0f0ff');
+          root.style.setProperty('--surface', 'rgba(0,0,0,0.03)');
+          root.style.setProperty('--card', 'rgba(0,0,0,0.04)');
+          root.style.setProperty('--text', '#1a1a2e');
+          root.style.setProperty('--text-muted', '#666688');
+          root.style.setProperty('--border', 'rgba(0,0,0,0.1)');
+          this.textContent = '☀️';
+        } else {
+          root.style.setProperty('--bg', '#0a0a1a');
+          root.style.setProperty('--surface', 'rgba(255,255,255,0.05)');
+          root.style.setProperty('--card', 'rgba(255,255,255,0.08)');
+          root.style.setProperty('--text', '#e0e0ff');
+          root.style.setProperty('--text-muted', '#8888aa');
+          root.style.setProperty('--border', 'rgba(255,255,255,0.1)');
+          this.textContent = '🌙';
+        }
+      });
+
+      // Settings theme toggle
+      document.getElementById('dark-mode-toggle').addEventListener('click', function() {
+        this.classList.toggle('on');
+        document.getElementById('theme-toggle').click();
+      });
+
+      // Accent color picker
+      document.querySelectorAll('.color-picker .cp').forEach(function(el) {
+        el.addEventListener('click', function() {
+          document.querySelectorAll('.color-picker .cp').forEach(function(c) { c.classList.remove('active'); });
+          this.classList.add('active');
+          document.documentElement.style.setProperty('--accent', this.getAttribute('data-color'));
+        });
+      });
+
+      // Chat
+      document.getElementById('chat-send').addEventListener('click', function() {
+        sendChatMsg();
+      });
+      document.getElementById('chat-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendChatMsg();
+      });
+      function sendChatMsg() {
+        var input = document.getElementById('chat-input');
+        var text = input.value.trim();
+        if (!text) return;
+        addChatMsg('user', text);
+        input.value = '';
+        setTimeout(function() {
+          var responses = [
+            "I've analyzed that request. Here's what I found...",
+            "Processing your command. System resources are optimal.",
+            "That's a great idea! Let me set that up for you.",
+            "I've completed the task. Anything else you need?",
+            "Here are the results of the analysis you requested."
+          ];
+          addChatMsg('ai', responses[Math.floor(Math.random() * responses.length)]);
+        }, 800);
+      }
+      function addChatMsg(role, text) {
+        var container = document.getElementById('chat-messages');
+        var msg = document.createElement('div');
+        msg.className = 'chat-msg ' + role;
+        msg.textContent = text;
+        container.appendChild(msg);
+        container.scrollTop = container.scrollHeight;
+      }
+      window.addChatMsg = addChatMsg;
+
+      // Pomodoro
+      (function() {
+        var timerEl = document.getElementById('pomodoro-timer');
+        var startBtn = document.getElementById('pomodoro-start');
+        var resetBtn = document.getElementById('pomodoro-reset');
+        var total = 25 * 60;
+        var remaining = total;
+        var interval = null;
+        function updateDisplay() {
+          var m = Math.floor(remaining / 60);
+          var s = remaining % 60;
+          timerEl.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+        }
+        startBtn.addEventListener('click', function() {
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+            startBtn.textContent = 'Resume';
+            return;
+          }
+          startBtn.textContent = 'Pause';
+          interval = setInterval(function() {
+            if (remaining <= 0) {
+              clearInterval(interval);
+              interval = null;
+              startBtn.textContent = 'Start';
+              timerEl.textContent = '00:00';
+              return;
+            }
+            remaining--;
+            updateDisplay();
+          }, 1000);
+        });
+        resetBtn.addEventListener('click', function() {
+          if (interval) { clearInterval(interval); interval = null; }
+          remaining = total;
+          startBtn.textContent = 'Start';
+          updateDisplay();
+        });
+        updateDisplay();
+      })();
+
+      // Toggle switches
+      document.querySelectorAll('.toggle-switch').forEach(function(t) {
+        if (t.id === 'dark-mode-toggle') return; // already handled
+        t.addEventListener('click', function() {
+          this.classList.toggle('on');
+        });
+      });
+
+      // Todo checkboxes
+      document.querySelectorAll('.todo-item input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          this.nextElementSibling.classList.toggle('done');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
