@@ -213,6 +213,10 @@
     .crk-add-area { display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap }
     .crk-add-area input { flex:1;min-width:150px }
     .crk-add-area select { width:auto;min-width:100px }
+    .crk-rarity-stat { padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:0.75rem;display:flex;align-items:center;gap:6px;background:var(--card) }
+    .crk-rarity-stat .rs-dot { width:8px;height:8px;border-radius:50%;display:inline-block }
+    .crk-rarity-stat .rs-num { font-weight:700 }
+    .crk-rarity-stat .rs-total { color:var(--text-muted) }
     .repo-list { display: flex; flex-direction: column; gap: 8px; }
     .repo-item { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); }
     .repo-item .repo-icon { font-size: 1.3rem; }
@@ -518,12 +522,13 @@
           <h1>🍪 CRK Collection</h1>
           <p>Track the cookies you've pulled from the Cookie Run Kingdom gacha.</p>
 
-          <div class="crk-stats">
+          <div class="crk-stats" style="margin-bottom:8px">
             <div class="stat"><div class="stat-num neon-text" id="crk-total-owned">0</div><div class="stat-lbl">Owned</div></div>
             <div class="stat"><div class="stat-num" id="crk-total-all">0</div><div class="stat-lbl">Total</div></div>
             <div class="stat-bar"><div class="fill" id="crk-progress-fill" style="width:0%"></div></div>
             <div class="stat"><div class="stat-num" id="crk-pct">0%</div><div class="stat-lbl">Complete</div></div>
           </div>
+          <div class="crk-rarity-stats" id="crk-rarity-stats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
 
           <div class="crk-filters" id="crk-filters">
             <button class="active" data-filter="all">All</button>
@@ -1283,6 +1288,23 @@
     var pct = allCookies.length ? Math.round(owned.length / allCookies.length * 100) : 0;
     document.getElementById('crk-pct').textContent = pct + '%';
     document.getElementById('crk-progress-fill').style.width = pct + '%';
+
+    // Per-rarity stats
+    var rarityOrder = ['Beast', 'Ancient', 'Legendary', 'Dragon', 'Super Epic', 'Epic', 'Rare', 'Common'];
+    var rarityIcons = { 'Beast': '🔥', 'Ancient': '👑', 'Legendary': '✨', 'Dragon': '🐉', 'Super Epic': '💫', 'Epic': '⭐', 'Rare': '🔹', 'Common': '📦' };
+    var rarityColors = { 'Beast': '#ff2200', 'Ancient': '#ffd700', 'Legendary': '#ff6bff', 'Dragon': '#ff4444', 'Super Epic': '#ff884d', 'Epic': '#a855f7', 'Rare': '#60a5fa', 'Common': '#94a3b8' };
+    var rsContainer = document.getElementById('crk-rarity-stats');
+    rsContainer.innerHTML = '';
+    rarityOrder.forEach(function(r) {
+      var rCookies = allCookies.filter(function(c) { return c.rarity === r; });
+      var total = rCookies.length;
+      var have = rCookies.filter(function(c) { return owned.indexOf(c.name) !== -1; }).length;
+      var el = document.createElement('div');
+      el.className = 'crk-rarity-stat';
+      el.innerHTML = '<span class="rs-dot" style="background:' + rarityColors[r] + '"></span>'
+        + rarityIcons[r] + ' ' + have + '<span class="rs-total">/' + total + '</span>';
+      rsContainer.appendChild(el);
+    });
 
     var grid = document.getElementById('crk-grid');
     grid.innerHTML = '';
