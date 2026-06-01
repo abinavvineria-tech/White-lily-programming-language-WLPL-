@@ -425,7 +425,7 @@
   // ============================================================
 
   function initNavigation() {
-    var navItems = qsa('.sidebar-nav-item');
+    var navItems = qsa('.nav-link');
     navItems.forEach(function (item) {
       item.addEventListener('click', function (e) {
         e.preventDefault();
@@ -447,15 +447,15 @@
   }
 
   function navigateTo(pageId) {
-    var pages = qsa('.page-section');
+    var pages = qsa('.page');
     pages.forEach(function (p) { p.classList.remove('active'); });
 
-    var target = $(pageId);
+    var target = $('page-' + pageId);
     if (target) {
       target.classList.add('active');
     }
 
-    var navItems = qsa('.sidebar-nav-item');
+    var navItems = qsa('.nav-link');
     navItems.forEach(function (item) {
       item.classList.remove('active');
       if (item.getAttribute('data-page') === pageId) {
@@ -463,19 +463,26 @@
       }
     });
 
+    var titleEl = $('page-title');
+    if (titleEl) {
+      var activeNav = qsa('.nav-link.active');
+      if (activeNav.length) {
+        titleEl.textContent = activeNav[0].textContent.trim();
+      }
+    }
+
     HuntrixApp.currentPage = pageId;
 
     switch (pageId) {
       case 'dashboard': showDashboard(); break;
-      case 'wlpm': showWLPM(); break;
-      case 'crk': showCRK(); break;
-      case 'ai': showAI(); break;
-      case 'devhub': showDevHub(); break;
-      case 'cloud': showCloud(); break;
-      case 'media': showMedia(); break;
-      case 'browser': showBrowser(); break;
-      case 'productivity': showProductivity(); break;
+      case 'crk-gacha': showCRK(); break;
       case 'analytics': showAnalytics(); break;
+      case 'wlpm': showWLPM(); break;
+      case 'developer-hub': showDevHub(); break;
+      case 'cloud-center': showCloud(); break;
+      case 'productivity': showProductivity(); break;
+      case 'media-center': showMedia(); break;
+      case 'browser': showBrowser(); break;
       case 'settings': showSettings(); break;
     }
   }
@@ -494,25 +501,21 @@
   }
 
   function renderStatCards(stats) {
+    var grid = $('stat-grid');
+    if (!grid) return;
+
+    var icons = { cpu: '⚡', ram: '🧠', storage: '💾', network: '📡' };
     var cards = [
-      { id: 'cpu-usage', key: 'cpu', label: 'CPU', icon: 'cpu' },
-      { id: 'ram-usage', key: 'ram', label: 'RAM', icon: 'memory' },
-      { id: 'storage-usage', key: 'storage', label: 'Storage', icon: 'storage' },
-      { id: 'network-usage', key: 'network', label: 'Network', icon: 'network' }
+      { key: 'cpu', label: 'CPU', icon: icons.cpu },
+      { key: 'ram', label: 'RAM', icon: icons.ram },
+      { key: 'storage', label: 'Storage', icon: icons.storage },
+      { key: 'network', label: 'Network', icon: icons.network }
     ];
 
-    cards.forEach(function (card) {
-      var el = $(card.id);
-      if (!el) return;
-      var val = stats[card.key] || 0;
-      var bar = qs('.stat-progress', el);
-      var valueEl = qs('.stat-value', el);
-      if (bar) {
-        bar.style.width = '0%';
-        setTimeout(function () { bar.style.width = val + '%'; }, 100);
-      }
-      if (valueEl) valueEl.textContent = val + '%';
-    });
+    grid.innerHTML = cards.map(function (c) {
+      var val = stats[c.key] || 0;
+      return '<div class="stat-card"><div class="stat-icon">' + c.icon + '</div><div class="stat-info"><div class="stat-value">' + val + '%</div><div class="stat-label">' + c.label + '</div><div class="stat-progress"><div class="stat-progress-bar" style="width:' + val + '%"></div></div></div></div>';
+    }).join('');
   }
 
   function renderActivityList(activities) {
@@ -1865,10 +1868,6 @@
     var prefs = getPreferences();
     applyTheme(prefs.theme || 'dark');
     applyAccent(prefs.accent || '#00f0ff');
-
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('auth-container').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
 
     initNavigation();
     initNotifications();
