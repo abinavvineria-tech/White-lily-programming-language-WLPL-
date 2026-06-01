@@ -1181,6 +1181,18 @@
         var pkgName = btn.getAttribute('data-pkg');
         var u = localStorage.getItem('huntrix_user');
         if (!u) return;
+
+        // Open real Android app for com.devsisters.ck
+        if (pkgName === 'com.devsisters.ck') {
+          var link = document.createElement('a');
+          link.href = 'intent://#Intent;package=com.devsisters.ck;end';
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          return;
+        }
+
         var d = getUserData(u);
         for (var i = 0; i < d.packages.length; i++) {
           if (d.packages[i].name === pkgName) {
