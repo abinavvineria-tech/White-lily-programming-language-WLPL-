@@ -3,9 +3,10 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 
-from wlpm.cache import Cache, InstallRecord
+from wlpm.cache import Cache, InstallRecord, History
 
 
 class TestCache(unittest.TestCase):
@@ -107,3 +108,48 @@ class TestInstallRecord(unittest.TestCase):
         self.assertIn("pkg-a", all_pkgs)
         self.assertIn("pkg-b", all_pkgs)
         self.assertEqual(len(all_pkgs), 2)
+
+
+class TestHistory(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.history = History(os.path.join(self.tmpdir, "history"))
+        self.history.ensure_dirs()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def test_add_and_list(self):
+        self.history.add_entry("install", [{"name": "pkg-a", "version": "1.0.0"}])
+        entries = self.history.list_history()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["action"], "install")
+
+    def test_last_entry(self):
+        self.history.add_entry("install", [{"name": "pkg-a", "version": "1.0.0"}])
+        last = self.history.last_entry()
+        self.assertEqual(last["action"], "install")
+
+    def test_last_entry_empty(self):
+        self.assertIsNone(self.history.last_entry())
+
+    def test_get_entry(self):
+        self.history.add_entry("remove", [{"name": "pkg-b"}])
+        entries = self.history.list_history()
+        eid = entries[0]["id"]
+        entry = self.history.get_entry(eid)
+        self.assertEqual(entry["action"], "remove")
+
+    def test_undo_last(self):
+        self.history.add_entry("install", [{"name": "pkg-a", "version": "1.0.0"}])
+        undone = self.history.undo_last()
+        self.assertEqual(undone["status"], "undone")
+        entry = self.history.last_entry()
+        self.assertEqual(entry["status"], "undone")
+
+    def test_limit(self):
+        for i in range(5):
+            self.history.add_entry("install", [{"name": f"pkg-{i}"}])
+        entries = self.history.list_history(limit=2)
+        self.assertEqual(len(entries), 2)

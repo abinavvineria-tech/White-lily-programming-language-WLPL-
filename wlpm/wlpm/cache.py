@@ -3,10 +3,8 @@
 import json
 import os
 import shutil
+import time
 from typing import Optional
-
-from wlpm.package import PackageMetadata
-from wlpm.ui import info, error
 
 
 class Cache:
@@ -171,3 +169,63 @@ class InstallRecord:
 
     def list_all(self) -> dict:
         return self.load()
+
+
+class History:
+    def __init__(self, history_dir: str):
+        self.history_dir = history_dir
+        self.history_path = os.path.join(history_dir, "history.json")
+
+    def ensure_dirs(self):
+        os.makedirs(self.history_dir, exist_ok=True)
+
+    def load(self) -> list:
+        if os.path.exists(self.history_path):
+            try:
+                with open(self.history_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        return []
+
+    def save(self, entries: list):
+        os.makedirs(os.path.dirname(self.history_path), exist_ok=True)
+        with open(self.history_path, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2, ensure_ascii=False)
+
+    def add_entry(self, action: str, packages: list, status: str = "completed"):
+        entries = self.load()
+        entry = {
+            "id": len(entries) + 1,
+            "action": action,
+            "packages": packages,
+            "status": status,
+            "timestamp": time.time(),
+            "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        entries.append(entry)
+        self.save(entries)
+        return entry
+
+    def list_history(self, limit: int = 20) -> list:
+        entries = self.load()
+        return entries[-limit:][::-1]
+
+    def get_entry(self, entry_id: int) -> Optional[dict]:
+        entries = self.load()
+        for entry in entries:
+            if entry.get("id") == entry_id:
+                return entry
+        return None
+
+    def last_entry(self) -> Optional[dict]:
+        entries = self.load()
+        return entries[-1] if entries else None
+
+    def undo_last(self):
+        entries = self.load()
+        if not entries:
+            return None
+        entries[-1]["status"] = "undone"
+        self.save(entries)
+        return entries[-1]
