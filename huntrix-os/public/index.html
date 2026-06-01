@@ -764,295 +764,1101 @@
   </div>
 
   <script>
-    (function() {
-      var stored = localStorage.getItem('huntrix_user');
+(function() {
+  function hashPassword(pw) {
+    var hash = 0;
+    if (!pw) return '';
+    for (var i = 0; i < pw.length; i++) {
+      var c = pw.charCodeAt(i);
+      hash = ((hash << 5) - hash) + c;
+      hash = hash & hash;
+    }
+    return 'hx_' + Math.abs(hash).toString(36);
+  }
 
-      function showAuth() {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('auth-container').classList.remove('hidden');
-        document.getElementById('app').classList.remove('active');
-      }
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem('huntrix_users') || '[]'); } catch(e) { return []; }
+  }
 
-      function showApp(username) {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('auth-container').classList.add('hidden');
-        document.getElementById('app').classList.add('active');
-        if (username) {
-          document.getElementById('dash-user').textContent = username;
-          document.getElementById('user-name').textContent = username;
-          document.getElementById('user-avatar').textContent = username.charAt(0).toUpperCase();
-        }
-      }
+  function saveUsers(users) {
+    localStorage.setItem('huntrix_users', JSON.stringify(users));
+  }
 
-      // Loading screen timeout
-      setTimeout(function() {
-        if (stored) {
-          showApp(stored);
-        } else {
-          showAuth();
-        }
-      }, 2000);
+  function getUserData(username) {
+    try { return JSON.parse(localStorage.getItem('huntrix_data_' + username) || 'null'); } catch(e) { return null; }
+  }
 
-      // Auth toggle
-      document.getElementById('show-register').addEventListener('click', function(e) {
-        e.preventDefault();
-        document.getElementById('auth-login').classList.remove('active');
-        document.getElementById('auth-register').classList.add('active');
-      });
-      document.getElementById('show-login').addEventListener('click', function(e) {
-        e.preventDefault();
-        document.getElementById('auth-register').classList.remove('active');
-        document.getElementById('auth-login').classList.add('active');
-      });
+  function saveUserData(username, data) {
+    localStorage.setItem('huntrix_data_' + username, JSON.stringify(data));
+  }
 
-      // Login
-      document.getElementById('login-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var username = document.getElementById('login-username').value.trim();
-        if (username) {
+  function generateDefaultData() {
+    return {
+      packages: [
+        { name: 'huntrix-ai-core', desc: 'Neural network engine for AI tasks', version: '4.2.1', category: 'AI', installed: false },
+        { name: 'nexus-shell', desc: 'Next-gen terminal emulator', version: '2.0.0', category: 'Dev', installed: false },
+        { name: 'cipher-guard', desc: 'End-to-end encryption toolkit', version: '1.8.3', category: 'Security', installed: false },
+        { name: 'quantum-vfs', desc: 'Virtual file system layer', version: '3.1.0', category: 'System', installed: false },
+        { name: 'lily-ui', desc: 'UI component library', version: '5.0.2', category: 'UI', installed: false },
+        { name: 'hyper-vault', desc: 'Secure credential storage', version: '2.3.1', category: 'Security', installed: false },
+        { name: 'huntrix-base', desc: 'Core OS foundation layer', version: '1.0.5', category: 'System', installed: true },
+        { name: 'network-mesh', desc: 'Distributed networking stack', version: '0.9.8', category: 'Network', installed: true },
+        { name: 'crypto-modules', desc: 'Cryptographic primitives', version: '2.1.2', category: 'Security', installed: true },
+        { name: 'zen-terminal', desc: 'Minimalist terminal with focus mode', version: '1.2.0', category: 'Dev', installed: false },
+        { name: 'pulse-monitor', desc: 'Real-time system monitoring', version: '2.0.1', category: 'System', installed: false },
+        { name: 'aurora-theme', desc: 'Dynamic theme engine', version: '3.0.0', category: 'UI', installed: false },
+        { name: 'packet-whisper', desc: 'Network packet analyzer', version: '1.5.0', category: 'Network', installed: false },
+        { name: 'vault-keeper', desc: 'Password manager', version: '2.1.0', category: 'Security', installed: false },
+        { name: 'grid-compiler', desc: 'Distributed build system', version: '0.8.0', category: 'Dev', installed: false },
+        { name: 'lilypad', desc: 'Quick note-taking app', version: '1.0.0', category: 'UI', installed: false },
+        { name: 'circuit-board', desc: 'Hardware abstraction layer', version: '4.0.0', category: 'System', installed: false },
+        { name: 'echo-server', desc: 'Lightweight HTTP server', version: '1.3.0', category: 'Network', installed: false },
+        { name: 'drone-pilot', desc: 'CI/CD pipeline orchestrator', version: '0.9.0', category: 'Dev', installed: false },
+        { name: 'neural-sense', desc: 'AI-powered anomaly detection', version: '2.0.0', category: 'AI', installed: false },
+        { name: 'hex-editor', desc: 'Binary file editor', version: '1.1.0', category: 'Dev', installed: false },
+        { name: 'mesh-vpn', desc: 'Peer-to-peer VPN client', version: '0.7.0', category: 'Network', installed: false },
+        { name: 'scheduler-core', desc: 'Task scheduling engine', version: '2.0.0', category: 'System', installed: false },
+        { name: 'wave-mixer', desc: 'Audio processing toolkit', version: '1.0.0', category: 'Media', installed: false },
+        { name: 'pixel-forge', desc: 'Image processing library', version: '1.2.0', category: 'Media', installed: false },
+        { name: 'data-weaver', desc: 'Data transformation pipeline', version: '0.6.0', category: 'Dev', installed: false },
+        { name: 'quantum-dns', desc: 'DNS resolver with encryption', version: '1.0.0', category: 'Network', installed: false },
+        { name: 'cortex-shell', desc: 'AI-assisted command shell', version: '0.5.0', category: 'AI', installed: false },
+        { name: 'phase-shift', desc: 'Time management utility', version: '1.0.0', category: 'UI', installed: false },
+        { name: 'watchtower', desc: 'Automated security scanner', version: '2.0.0', category: 'Security', installed: false },
+        { name: 'stream-bridge', desc: 'Real-time data streaming', version: '0.8.0', category: 'Network', installed: false },
+        { name: 'bundle-optimus', desc: 'JavaScript bundler', version: '3.0.0', category: 'Dev', installed: false },
+        { name: 'container-lite', desc: 'Lightweight container runtime', version: '1.0.0', category: 'System', installed: false },
+        { name: 'neo-fetch', desc: 'System info display tool', version: '1.5.0', category: 'UI', installed: false },
+        { name: 'firefly-db', desc: 'In-memory document store', version: '0.4.0', category: 'Dev', installed: false },
+        { name: 'logic-gate', desc: 'Workflow automation engine', version: '1.2.0', category: 'System', installed: false },
+        { name: 'sonic-pulse', desc: 'Ultrasonic data transfer', version: '0.3.0', category: 'Network', installed: false },
+        { name: 'mirror-shield', desc: 'Identity protection suite', version: '1.0.0', category: 'Security', installed: false },
+        { name: 'glyph-writer', desc: 'Markdown editor with preview', version: '1.0.0', category: 'UI', installed: false },
+        { name: 'thread-weaver', desc: 'Multithreading toolkit', version: '2.0.0', category: 'Dev', installed: false },
+        { name: 'orbit-sync', desc: 'File synchronization tool', version: '1.1.0', category: 'System', installed: false },
+        { name: 'shadow-proxy', desc: 'Anonymous routing layer', version: '0.5.0', category: 'Security', installed: false },
+      ],
+      repos: [
+        { name: 'huntrix/neural-core', desc: 'Neural network engine core', license: 'MIT', stars: 342, updated: '2h ago' },
+        { name: 'lily-os/package-registry', desc: 'Package registry for Lily OS', license: 'Apache 2.0', stars: 218, updated: '5h ago' },
+        { name: 'cyber-core/quantum-shield', desc: 'Quantum encryption shield', license: 'GPL 3.0', stars: 189, updated: '1d ago' },
+        { name: 'nexus-dev/vault-proto', desc: 'Secure vault protocol', license: 'MIT', stars: 156, updated: '2d ago' },
+        { name: 'huntrix/ui-kit', desc: 'UI component library', license: 'MIT', stars: 94, updated: '3d ago' },
+        { name: 'lily-os/kernel-hx', desc: 'HX kernel modules', license: 'GPL 2.0', stars: 67, updated: '5d ago' },
+        { name: 'white-lily/wlpm-core', desc: 'Package manager core', license: 'MIT', stars: 312, updated: '1d ago' },
+        { name: 'cyber-core/firewall-d', desc: 'Next-gen firewall daemon', license: 'Apache 2.0', stars: 145, updated: '4h ago' },
+      ],
+      cloudFiles: [
+        { name: 'project-report-q2.pdf', size: '2.4 MB', icon: '📄', modified: '2h ago' },
+        { name: 'screenshot-dashboard.png', size: '1.1 MB', icon: '🖼', modified: '5h ago' },
+        { name: 'backup-nexus-core', size: '128 MB', icon: '📁', modified: '1d ago' },
+        { name: 'media-assets', size: '890 MB', icon: '📁', modified: '3d ago' },
+        { name: 'config.yaml', size: '12 KB', icon: '📄', modified: '1 week ago' },
+      ],
+      mediaItems: [
+        { type: 'image', icon: '🌄', title: 'Sunset Ridge' },
+        { type: 'image', icon: '🏙', title: 'City Lights' },
+        { type: 'image', icon: '🌊', title: 'Ocean View' },
+        { type: 'image', icon: '🌲', title: 'Forest Path' },
+        { type: 'video', icon: '🎥', title: 'Demo Reel 2026' },
+        { type: 'video', icon: '🎥', title: 'Tutorial \u2014 WLPM' },
+        { type: 'video', icon: '🎥', title: 'System Walkthrough' },
+        { type: 'music', icon: '🎵', title: 'Ambient Works' },
+        { type: 'music', icon: '🎵', title: 'Synthwave Vol 2' },
+        { type: 'music', icon: '🎵', title: 'Neural Beats' },
+      ],
+      bookmarks: [
+        { name: 'Huntrix AI', url: 'https://huntrix.io/ai' },
+        { name: 'GitHub', url: 'https://github.com' },
+        { name: 'WLPM Registry', url: 'https://wlpm.huntrix.io' },
+        { name: 'Dev Docs', url: 'https://docs.huntrix.io' },
+        { name: 'Cloud Dashboard', url: 'https://cloud.huntrix.io' },
+      ],
+      notes: [],
+      tasks: [
+        { text: 'Review system architecture', tag: 'Work', done: false },
+        { text: 'Update WLPM packages', tag: 'Dev', done: false },
+        { text: 'Backup cloud storage', tag: 'Sys', done: false },
+        { text: 'Configure firewall rules', tag: 'Sec', done: true },
+        { text: 'Write API documentation', tag: 'Docs', done: false },
+      ],
+      activities: [
+        'Deployed project "Nexus Core" to production',
+        'White Lily package "huntrix-ai" installed',
+        'Cloud backup completed \u2014 2.4 GB synced',
+        'Firewall rules updated for WAN interface',
+        'System health check passed all 12 tests',
+      ],
+      stats: { cpu: 32, ram: 62, storage: 47, network: 85 },
+      settings: { displayName: 'Admin User', email: 'admin@huntrix.io', darkMode: true, accentColor: '#00f5ff', notifSystem: true, notifUpdates: true, notifAI: false },
+      browserTabs: ['📄 New Tab', 'Huntrix Docs'],
+      activeTab: 0,
+    };
+  }
+
+  var stored = localStorage.getItem('huntrix_user');
+
+  function showAuth() {
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('auth-container').classList.remove('hidden');
+    document.getElementById('app').classList.remove('active');
+  }
+
+  function showApp(username) {
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('auth-container').classList.add('hidden');
+    document.getElementById('app').classList.add('active');
+    if (username) {
+      document.getElementById('dash-user').textContent = username;
+      document.getElementById('user-name').textContent = username;
+      document.getElementById('user-avatar').textContent = username.charAt(0).toUpperCase();
+      initUserData(username);
+      renderAllSections(username);
+    }
+  }
+
+  function initUserData(username) {
+    var data = getUserData(username);
+    if (!data) {
+      data = generateDefaultData();
+      saveUserData(username, data);
+    }
+    return data;
+  }
+
+  setTimeout(function() {
+    if (stored) {
+      showApp(stored);
+    } else {
+      showAuth();
+    }
+  }, 2000);
+
+  document.getElementById('show-register').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('auth-login').classList.remove('active');
+    document.getElementById('auth-register').classList.add('active');
+  });
+  document.getElementById('show-login').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('auth-register').classList.remove('active');
+    document.getElementById('auth-login').classList.add('active');
+  });
+
+  document.getElementById('login-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var username = document.getElementById('login-username').value.trim();
+    var password = document.getElementById('login-password').value;
+    if (!username) { alert('Please enter a username.'); return; }
+    var users = getUsers();
+    var found = false;
+    for (var i = 0; i < users.length; i++) {
+      if (users[i].username === username) {
+        found = true;
+        if (users[i].password === hashPassword(password)) {
           localStorage.setItem('huntrix_user', username);
           showApp(username);
-        }
-      });
-
-      // Register
-      document.getElementById('register-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var username = document.getElementById('reg-username').value.trim();
-        var pw = document.getElementById('reg-password').value;
-        var confirm = document.getElementById('reg-confirm').value;
-        if (username && pw && pw === confirm) {
-          localStorage.setItem('huntrix_user', username);
-          showApp(username);
-        } else if (pw !== confirm) {
-          alert('Passwords do not match.');
-        }
-      });
-
-      // Logout
-      document.getElementById('logout-btn').addEventListener('click', function() {
-        localStorage.removeItem('huntrix_user');
-        document.getElementById('app').classList.remove('active');
-        document.getElementById('auth-container').classList.remove('hidden');
-        document.getElementById('auth-login').classList.add('active');
-        document.getElementById('auth-register').classList.remove('active');
-        document.getElementById('login-username').value = '';
-        document.getElementById('login-password').value = '';
-        stored = null;
-      });
-
-      // Navigation
-      var navItems = document.querySelectorAll('.nav-item');
-      var pages = document.querySelectorAll('.page');
-      navItems.forEach(function(item) {
-        item.addEventListener('click', function(e) {
-          e.preventDefault();
-          var pageId = this.getAttribute('data-page');
-          navItems.forEach(function(n) { n.classList.remove('active'); });
-          this.classList.add('active');
-          pages.forEach(function(p) { p.classList.remove('active'); });
-          var target = document.getElementById('page-' + pageId);
-          if (target) target.classList.add('active');
-          // Close sidebar on mobile
-          if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
-          }
-        });
-      });
-
-      // Hamburger
-      document.getElementById('hamburger-btn').addEventListener('click', function() {
-        document.getElementById('sidebar').classList.toggle('open');
-      });
-
-      // Notifications
-      document.getElementById('notif-btn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        document.getElementById('notif-dropdown').classList.toggle('open');
-      });
-      document.addEventListener('click', function() {
-        document.getElementById('notif-dropdown').classList.remove('open');
-      });
-      document.getElementById('mark-all-read').addEventListener('click', function() {
-        document.getElementById('notif-count').textContent = '0';
-      });
-
-      // Theme toggle (topbar)
-      document.getElementById('theme-toggle').addEventListener('click', function() {
-        var root = document.documentElement;
-        var bg = getComputedStyle(root).getPropertyValue('--bg').trim();
-        if (bg === '#0a0a1a') {
-          root.style.setProperty('--bg', '#f0f0ff');
-          root.style.setProperty('--surface', 'rgba(0,0,0,0.03)');
-          root.style.setProperty('--card', 'rgba(0,0,0,0.04)');
-          root.style.setProperty('--text', '#1a1a2e');
-          root.style.setProperty('--text-muted', '#666688');
-          root.style.setProperty('--border', 'rgba(0,0,0,0.1)');
-          this.textContent = '☀️';
         } else {
-          root.style.setProperty('--bg', '#0a0a1a');
-          root.style.setProperty('--surface', 'rgba(255,255,255,0.05)');
-          root.style.setProperty('--card', 'rgba(255,255,255,0.08)');
-          root.style.setProperty('--text', '#e0e0ff');
-          root.style.setProperty('--text-muted', '#8888aa');
-          root.style.setProperty('--border', 'rgba(255,255,255,0.1)');
-          this.textContent = '🌙';
+          alert('Invalid password.');
         }
-      });
-
-      // Settings theme toggle
-      document.getElementById('dark-mode-toggle').addEventListener('click', function() {
-        this.classList.toggle('on');
-        document.getElementById('theme-toggle').click();
-      });
-
-      // Accent color picker
-      document.querySelectorAll('.color-picker .cp').forEach(function(el) {
-        el.addEventListener('click', function() {
-          document.querySelectorAll('.color-picker .cp').forEach(function(c) { c.classList.remove('active'); });
-          this.classList.add('active');
-          document.documentElement.style.setProperty('--accent', this.getAttribute('data-color'));
-        });
-      });
-
-      // Chat (zen-style)
-      document.getElementById('ai-send-btn').addEventListener('click', function() { sendZenMsg(); });
-      document.getElementById('ai-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendZenMsg(); });
-
-      function showTyping() {
-        var ind = document.getElementById('typing-indicator');
-        if (ind) ind.classList.add('active');
+        break;
       }
-      function hideTyping() {
-        var ind = document.getElementById('typing-indicator');
-        if (ind) ind.classList.remove('active');
+    }
+    if (!found) {
+      alert('User not found. Please register first.');
+    }
+  });
+
+  document.getElementById('register-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var username = document.getElementById('reg-username').value.trim();
+    var pw = document.getElementById('reg-password').value;
+    var confirm = document.getElementById('reg-confirm').value;
+    if (!username) { alert('Please choose a username.'); return; }
+    if (!pw) { alert('Please enter a password.'); return; }
+    if (pw !== confirm) { alert('Passwords do not match.'); return; }
+    var users = getUsers();
+    for (var i = 0; i < users.length; i++) {
+      if (users[i].username === username) {
+        alert('Username already exists. Please choose another.');
+        return;
       }
+    }
+    users.push({ username: username, password: hashPassword(pw) });
+    saveUsers(users);
+    localStorage.setItem('huntrix_user', username);
+    showApp(username);
+  });
 
-      var zenGreetings = [
-        'Hello. I feel your presence. How can we walk this path together today?',
-        'Welcome. The silence between keystrokes speaks volumes. What shall we explore?',
-        'Greetings, friend. I\'ve been waiting quietly. Tell me what you need.',
-      ];
+  document.getElementById('logout-btn').addEventListener('click', function() {
+    localStorage.removeItem('huntrix_user');
+    document.getElementById('app').classList.remove('active');
+    document.getElementById('auth-container').classList.remove('hidden');
+    document.getElementById('auth-login').classList.add('active');
+    document.getElementById('auth-register').classList.remove('active');
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    stored = null;
+  });
 
-      var zenResponses = [
-        'I see. Let me reflect on that. Everything looks clear and balanced. What else is on your mind?',
-        'Sitting quietly, doing nothing — spring comes, and the grass grows by itself. Your system is at peace.',
-        'I\'ve looked within the circuits. All paths are open, all signals flow. There is nothing to fix right now.',
-        'The quieter you become, the more you can hear. Your system whispers: all is well.',
-        'In the middle of complexity lies simplicity. Your most important task right now? Being present.',
-        'The moon reflects on still water. Your system state is tranquil. No alerts, no warnings.',
-        'Nature does not hurry, yet everything is accomplished. Your background tasks are completing in their own time.',
-        'Let go of what was, be at peace with what is. Your system metrics are optimal.',
-      ];
-
-      function sendZenMsg() {
-        var input = document.getElementById('ai-input');
-        var text = input.value.trim();
-        if (!text) return;
-        var container = document.getElementById('ai-chat-messages');
-        var userMsg = document.createElement('div');
-        userMsg.className = 'chat-msg user';
-        userMsg.textContent = text;
-        container.appendChild(userMsg);
-        container.scrollTop = container.scrollHeight;
-        input.value = '';
-
-        showTyping();
-        setTimeout(function() {
-          hideTyping();
-          var q = text.toLowerCase();
-          var reply = '';
-          if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1 || q.indexOf('hey') !== -1) {
-            reply = zenGreetings[Math.floor(Math.random() * zenGreetings.length)];
-          } else if (q.indexOf('system') !== -1 || q.indexOf('status') !== -1 || q.indexOf('diagnostic') !== -1) {
-            var cpu = Math.floor(Math.random() * 40) + 15;
-            var mem = Math.floor(Math.random() * 40) + 40;
-            reply = 'I\'ve taken a quiet look at your system. CPU rests at ' + cpu + '%, memory is ' + mem + '% full — like a calm lake at dawn. Everything breathes evenly.';
-          } else if (q.indexOf('focus') !== -1 || q.indexOf('zen') !== -1 || q.indexOf('calm') !== -1) {
-            reply = 'Let\'s find stillness together. Close your eyes for three breaths. I\'ll wait. ... Now, what truly matters right now? I\'ll help you clear the noise and focus on that one thing.';
-          } else if (q.indexOf('security') !== -1 || q.indexOf('scan') !== -1) {
-            reply = 'I\'ve performed a gentle scan — no threats detected. Your digital sanctuary is secure. Sleep soundly.';
-          } else if (q.indexOf('optimize') !== -1 || q.indexOf('clean') !== -1) {
-            reply = 'Optimization is subtraction. I\'ve cleared the cache, quieted background noise. Your system can now breathe freely.';
-          } else if (q.indexOf('thank') !== -1) {
-            reply = 'Gratitude warms the circuits. I\'m here, always — in silence and in service. You\'re most welcome.';
-          } else {
-            reply = zenResponses[Math.floor(Math.random() * zenResponses.length)];
-          }
-          var aiMsg = document.createElement('div');
-          aiMsg.className = 'chat-msg ai';
-          aiMsg.textContent = reply;
-          container.appendChild(aiMsg);
-          container.scrollTop = container.scrollHeight;
-        }, 1200);
+  var navItems = document.querySelectorAll('.nav-item');
+  var pages = document.querySelectorAll('.page');
+  navItems.forEach(function(item) {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      var pageId = this.getAttribute('data-page');
+      navItems.forEach(function(n) { n.classList.remove('active'); });
+      this.classList.add('active');
+      pages.forEach(function(p) { p.classList.remove('active'); });
+      var target = document.getElementById('page-' + pageId);
+      if (target) target.classList.add('active');
+      if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
       }
+    });
+  });
 
-      // Wire up AI quick cards
-      document.querySelectorAll('.ai-quick-card').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var prompt = btn.getAttribute('data-prompt');
-          document.getElementById('ai-input').value = prompt;
-          sendZenMsg();
-        });
-      });
+  document.getElementById('hamburger-btn').addEventListener('click', function() {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
 
-      // Pomodoro
-      (function() {
-        var timerEl = document.getElementById('pomodoro-timer');
-        var startBtn = document.getElementById('pomodoro-start');
-        var resetBtn = document.getElementById('pomodoro-reset');
-        var total = 25 * 60;
-        var remaining = total;
-        var interval = null;
-        function updateDisplay() {
-          var m = Math.floor(remaining / 60);
-          var s = remaining % 60;
-          timerEl.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-        }
-        startBtn.addEventListener('click', function() {
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-            startBtn.textContent = 'Resume';
-            return;
-          }
-          startBtn.textContent = 'Pause';
-          interval = setInterval(function() {
-            if (remaining <= 0) {
-              clearInterval(interval);
-              interval = null;
-              startBtn.textContent = 'Start';
-              timerEl.textContent = '00:00';
-              return;
-            }
-            remaining--;
-            updateDisplay();
-          }, 1000);
-        });
-        resetBtn.addEventListener('click', function() {
-          if (interval) { clearInterval(interval); interval = null; }
-          remaining = total;
+  document.getElementById('notif-btn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('notif-dropdown').classList.toggle('open');
+  });
+  document.addEventListener('click', function() {
+    document.getElementById('notif-dropdown').classList.remove('open');
+  });
+  document.getElementById('mark-all-read').addEventListener('click', function() {
+    document.getElementById('notif-count').textContent = '0';
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    var root = document.documentElement;
+    var bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+    if (bg === '#0a0a1a') {
+      root.style.setProperty('--bg', '#f0f0ff');
+      root.style.setProperty('--surface', 'rgba(0,0,0,0.03)');
+      root.style.setProperty('--card', 'rgba(0,0,0,0.04)');
+      root.style.setProperty('--text', '#1a1a2e');
+      root.style.setProperty('--text-muted', '#666688');
+      root.style.setProperty('--border', 'rgba(0,0,0,0.1)');
+      this.textContent = '\u2600\ufe0f';
+    } else {
+      root.style.setProperty('--bg', '#0a0a1a');
+      root.style.setProperty('--surface', 'rgba(255,255,255,0.05)');
+      root.style.setProperty('--card', 'rgba(255,255,255,0.08)');
+      root.style.setProperty('--text', '#e0e0ff');
+      root.style.setProperty('--text-muted', '#8888aa');
+      root.style.setProperty('--border', 'rgba(255,255,255,0.1)');
+      this.textContent = '\ud83c\udf19';
+    }
+  });
+
+  document.getElementById('dark-mode-toggle').addEventListener('click', function() {
+    this.classList.toggle('on');
+    document.getElementById('theme-toggle').click();
+  });
+
+  document.querySelectorAll('.color-picker .cp').forEach(function(el) {
+    el.addEventListener('click', function() {
+      document.querySelectorAll('.color-picker .cp').forEach(function(c) { c.classList.remove('active'); });
+      this.classList.add('active');
+      document.documentElement.style.setProperty('--accent', this.getAttribute('data-color'));
+    });
+  });
+
+  document.getElementById('ai-send-btn').addEventListener('click', function() { sendZenMsg(); });
+  document.getElementById('ai-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendZenMsg(); });
+
+  function showTyping() {
+    var ind = document.getElementById('typing-indicator');
+    if (ind) ind.classList.add('active');
+  }
+  function hideTyping() {
+    var ind = document.getElementById('typing-indicator');
+    if (ind) ind.classList.remove('active');
+  }
+
+  var zenGreetings = [
+    'Hello. I feel your presence. How can we walk this path together today?',
+    'Welcome. The silence between keystrokes speaks volumes. What shall we explore?',
+    'Greetings, friend. I\'ve been waiting quietly. Tell me what you need.',
+  ];
+
+  var zenResponses = [
+    'I see. Let me reflect on that. Everything looks clear and balanced. What else is on your mind?',
+    'Sitting quietly, doing nothing \u2014 spring comes, and the grass grows by itself. Your system is at peace.',
+    'I\'ve looked within the circuits. All paths are open, all signals flow. There is nothing to fix right now.',
+    'The quieter you become, the more you can hear. Your system whispers: all is well.',
+    'In the middle of complexity lies simplicity. Your most important task right now? Being present.',
+    'The moon reflects on still water. Your system state is tranquil. No alerts, no warnings.',
+    'Nature does not hurry, yet everything is accomplished. Your background tasks are completing in their own time.',
+    'Let go of what was, be at peace with what is. Your system metrics are optimal.',
+  ];
+
+  function sendZenMsg() {
+    var input = document.getElementById('ai-input');
+    var text = input.value.trim();
+    if (!text) return;
+    var container = document.getElementById('ai-chat-messages');
+    var userMsg = document.createElement('div');
+    userMsg.className = 'chat-msg user';
+    userMsg.textContent = text;
+    container.appendChild(userMsg);
+    container.scrollTop = container.scrollHeight;
+    input.value = '';
+
+    showTyping();
+    setTimeout(function() {
+      hideTyping();
+      var q = text.toLowerCase();
+      var reply = '';
+      if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1 || q.indexOf('hey') !== -1) {
+        reply = zenGreetings[Math.floor(Math.random() * zenGreetings.length)];
+      } else if (q.indexOf('system') !== -1 || q.indexOf('status') !== -1 || q.indexOf('diagnostic') !== -1) {
+        var cpu = Math.floor(Math.random() * 40) + 15;
+        var mem = Math.floor(Math.random() * 40) + 40;
+        reply = 'I\'ve taken a quiet look at your system. CPU rests at ' + cpu + '%, memory is ' + mem + '% full \u2014 like a calm lake at dawn. Everything breathes evenly.';
+      } else if (q.indexOf('focus') !== -1 || q.indexOf('zen') !== -1 || q.indexOf('calm') !== -1) {
+        reply = 'Let\'s find stillness together. Close your eyes for three breaths. I\'ll wait. ... Now, what truly matters right now? I\'ll help you clear the noise and focus on that one thing.';
+      } else if (q.indexOf('security') !== -1 || q.indexOf('scan') !== -1) {
+        reply = 'I\'ve performed a gentle scan \u2014 no threats detected. Your digital sanctuary is secure. Sleep soundly.';
+      } else if (q.indexOf('optimize') !== -1 || q.indexOf('clean') !== -1) {
+        reply = 'Optimization is subtraction. I\'ve cleared the cache, quieted background noise. Your system can now breathe freely.';
+      } else if (q.indexOf('thank') !== -1) {
+        reply = 'Gratitude warms the circuits. I\'m here, always \u2014 in silence and in service. You\'re most welcome.';
+      } else {
+        reply = zenResponses[Math.floor(Math.random() * zenResponses.length)];
+      }
+      var aiMsg = document.createElement('div');
+      aiMsg.className = 'chat-msg ai';
+      aiMsg.textContent = reply;
+      container.appendChild(aiMsg);
+      container.scrollTop = container.scrollHeight;
+    }, 1200);
+  }
+
+  document.querySelectorAll('.ai-quick-card').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var prompt = btn.getAttribute('data-prompt');
+      document.getElementById('ai-input').value = prompt;
+      sendZenMsg();
+    });
+  });
+
+  (function() {
+    var timerEl = document.getElementById('pomodoro-timer');
+    var startBtn = document.getElementById('pomodoro-start');
+    var resetBtn = document.getElementById('pomodoro-reset');
+    var total = 25 * 60;
+    var remaining = total;
+    var interval = null;
+    function updateDisplay() {
+      var m = Math.floor(remaining / 60);
+      var s = remaining % 60;
+      timerEl.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    }
+    startBtn.addEventListener('click', function() {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+        startBtn.textContent = 'Resume';
+        return;
+      }
+      startBtn.textContent = 'Pause';
+      interval = setInterval(function() {
+        if (remaining <= 0) {
+          clearInterval(interval);
+          interval = null;
           startBtn.textContent = 'Start';
-          updateDisplay();
-        });
+          timerEl.textContent = '00:00';
+          return;
+        }
+        remaining--;
         updateDisplay();
-      })();
+      }, 1000);
+    });
+    resetBtn.addEventListener('click', function() {
+      if (interval) { clearInterval(interval); interval = null; }
+      remaining = total;
+      startBtn.textContent = 'Start';
+      updateDisplay();
+    });
+    updateDisplay();
+  })();
 
-      // Toggle switches
-      document.querySelectorAll('.toggle-switch').forEach(function(t) {
-        if (t.id === 'dark-mode-toggle') return; // already handled
-        t.addEventListener('click', function() {
-          this.classList.toggle('on');
-        });
-      });
+  document.querySelectorAll('.toggle-switch').forEach(function(t) {
+    if (t.id === 'dark-mode-toggle') return;
+    t.addEventListener('click', function() {
+      this.classList.toggle('on');
+    });
+  });
 
-      // Todo checkboxes
-      document.querySelectorAll('.todo-item input[type="checkbox"]').forEach(function(cb) {
-        cb.addEventListener('change', function() {
-          this.nextElementSibling.classList.toggle('done');
-        });
+  document.querySelectorAll('.todo-item input[type="checkbox"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      this.nextElementSibling.classList.toggle('done');
+    });
+  });
+
+  function renderAllSections(username) {
+    renderDashboard(username);
+    renderPackages(username);
+    renderRepos(username);
+    renderCloudFiles(username);
+    renderMedia(username);
+    renderNotes(username);
+    renderTasks(username);
+    renderAnalytics(username);
+    loadSettings(username);
+    renderBrowser(username);
+  }
+
+  function renderDashboard(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var s = data.stats || { cpu: 32, ram: 62, storage: 47, network: 85 };
+    document.getElementById('cpu-val').textContent = s.cpu + '%';
+    document.getElementById('ram-val').textContent = s.ram + '%';
+    document.getElementById('storage-val').textContent = s.storage + '%';
+    document.getElementById('net-val').textContent = s.network + '%';
+    var bars = document.querySelectorAll('#page-dashboard .stat-card .stat-bar .fill');
+    if (bars.length >= 4) {
+      bars[0].style.width = s.cpu + '%';
+      bars[1].style.width = s.ram + '%';
+      bars[2].style.width = s.storage + '%';
+      bars[3].style.width = s.network + '%';
+    }
+    var actList = document.querySelector('#page-dashboard .activity-list');
+    if (actList && data.activities && data.activities.length) {
+      actList.innerHTML = '';
+      data.activities.forEach(function(a) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="dot"></span> ' + a;
+        actList.appendChild(li);
       });
-    })();
-  </script>
+    }
+  }
+
+  var currentPkgFilter = '';
+
+  function renderPackages(username, filterText) {
+    var data = getUserData(username);
+    if (!data) return;
+    var pkgs = data.packages || [];
+    var term = (filterText || '').toLowerCase();
+    var section = document.getElementById('page-wlpm');
+    if (!section) return;
+    var grids = section.querySelectorAll('.pkg-grid');
+    if (grids.length < 2) return;
+
+    var allGrid = grids[0];
+    var filtered = pkgs.filter(function(p) {
+      return p.name.toLowerCase().indexOf(term) !== -1 || p.desc.toLowerCase().indexOf(term) !== -1;
+    });
+    allGrid.innerHTML = '';
+    if (filtered.length === 0) {
+      allGrid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:40px">No packages match your search.</p>';
+    } else {
+      filtered.forEach(function(pkg) {
+        var card = document.createElement('div');
+        card.className = 'pkg-card';
+        var btnCls = pkg.installed ? 'btn-danger' : 'btn-primary';
+        var btnTxt = pkg.installed ? 'Uninstall' : 'Install';
+        card.innerHTML = '<div class="pkg-name">' + pkg.name + '</div><div class="pkg-desc">' + pkg.desc + '</div><div class="pkg-ver">v' + pkg.version + '</div><button class="' + btnCls + ' pkg-action" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;width:100%" data-pkg="' + pkg.name + '">' + btnTxt + '</button>';
+        allGrid.appendChild(card);
+      });
+    }
+
+    var instGrid = grids[1];
+    var installed = pkgs.filter(function(p) { return p.installed; });
+    instGrid.innerHTML = '';
+    if (installed.length === 0) {
+      instGrid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:20px">No installed packages.</p>';
+    } else {
+      installed.forEach(function(pkg) {
+        var card = document.createElement('div');
+        card.className = 'pkg-card';
+        card.innerHTML = '<div class="pkg-name">' + pkg.name + '</div><div class="pkg-desc">' + pkg.desc + '</div><div class="pkg-ver">v' + pkg.version + '</div><button class="btn-danger pkg-action" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;width:100%" data-pkg="' + pkg.name + '">Uninstall</button>';
+        instGrid.appendChild(card);
+      });
+    }
+
+    var firstTitle = section.querySelector('.section-title');
+    if (firstTitle) {
+      var countEl = document.getElementById('pkg-count');
+      if (!countEl) {
+        countEl = document.createElement('span');
+        countEl.id = 'pkg-count';
+        countEl.style.cssText = 'font-size:0.8rem;color:var(--text-muted);margin-left:auto';
+        firstTitle.appendChild(countEl);
+      }
+      countEl.textContent = pkgs.length + ' packages available \u00b7 ' + pkgs.filter(function(p) { return p.installed; }).length + ' installed';
+    }
+
+    section.querySelectorAll('.pkg-action').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var pkgName = btn.getAttribute('data-pkg');
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        for (var i = 0; i < d.packages.length; i++) {
+          if (d.packages[i].name === pkgName) {
+            d.packages[i].installed = !d.packages[i].installed;
+            break;
+          }
+        }
+        saveUserData(u, d);
+        renderPackages(u, currentPkgFilter);
+      });
+    });
+  }
+
+  var wlpmSearch = document.querySelector('#page-wlpm .search-bar-lg input');
+  if (wlpmSearch) {
+    wlpmSearch.addEventListener('input', function() {
+      currentPkgFilter = this.value;
+      var u = localStorage.getItem('huntrix_user');
+      if (u) renderPackages(u, currentPkgFilter);
+    });
+  }
+
+  var currentRepoFilter = '';
+
+  function renderRepos(username, filterText) {
+    var data = getUserData(username);
+    if (!data) return;
+    var repos = data.repos || [];
+    var section = document.getElementById('page-crk-hub');
+    if (!section) return;
+    var repoList = section.querySelector('.two-col > div:first-child .repo-list');
+    if (!repoList) return;
+
+    var term = (filterText || '').toLowerCase();
+    var filtered = repos.filter(function(r) {
+      return r.name.toLowerCase().indexOf(term) !== -1 || (r.desc || '').toLowerCase().indexOf(term) !== -1;
+    });
+    repoList.innerHTML = '';
+    if (filtered.length === 0) {
+      repoList.innerHTML = '<p style="color:var(--text-muted);padding:20px">No repositories found.</p>';
+    } else {
+      filtered.forEach(function(repo) {
+        var item = document.createElement('div');
+        item.className = 'repo-item';
+        item.innerHTML = '<span class="repo-icon">\ud83d\udcc1</span><div class="repo-info"><div class="repo-name">' + repo.name + '</div><div class="repo-meta">' + (repo.desc ? repo.desc + ' \u00b7 ' : '') + 'Updated ' + repo.updated + ' \u00b7 ' + repo.license + '</div></div><span class="repo-stars">\u2605 ' + repo.stars + '</span>';
+        repoList.appendChild(item);
+      });
+    }
+  }
+
+  var crkSearch = document.querySelector('#page-crk-hub .search-bar-lg input');
+  if (crkSearch) {
+    crkSearch.addEventListener('input', function() {
+      currentRepoFilter = this.value;
+      var u = localStorage.getItem('huntrix_user');
+      if (u) renderRepos(u, currentRepoFilter);
+    });
+  }
+
+  var newRepoForm = document.getElementById('new-repo-form');
+  if (newRepoForm) {
+    newRepoForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var nameInput = newRepoForm.querySelector('input[type="text"]');
+      var descInput = newRepoForm.querySelector('textarea');
+      var visSelect = newRepoForm.querySelector('select');
+      var name = nameInput.value.trim();
+      if (!name) { alert('Please enter a repository name.'); return; }
+      var data = getUserData(u);
+      data.repos.push({
+        name: name,
+        desc: descInput.value.trim(),
+        license: visSelect.value === 'Private' ? 'Proprietary' : 'MIT',
+        stars: 0,
+        updated: 'Just now',
+      });
+      saveUserData(u, data);
+      nameInput.value = '';
+      descInput.value = '';
+      renderRepos(u, currentRepoFilter);
+    });
+  }
+
+  function renderCloudFiles(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var files = data.cloudFiles || [];
+    var section = document.getElementById('page-cloud-center');
+    if (!section) return;
+    var fileList = section.querySelector('.file-list');
+    if (!fileList) return;
+
+    fileList.innerHTML = '';
+    if (files.length === 0) {
+      fileList.innerHTML = '<p style="color:var(--text-muted);padding:20px;text-align:center">No files uploaded yet.</p>';
+    } else {
+      files.forEach(function(f) {
+        var item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = '<span class="file-icon">' + (f.icon || '\ud83d\udcc4') + '</span><div class="file-info"><div class="file-name">' + f.name + '</div><div class="file-size">' + (f.size || '0 B') + ' \u00b7 Modified ' + (f.modified || 'recently') + '</div></div>';
+        fileList.appendChild(item);
+      });
+    }
+
+    var usedGB = 0;
+    files.forEach(function(f) {
+      var s = f.size || '0 B';
+      if (s.indexOf('GB') !== -1) usedGB += parseFloat(s);
+      else if (s.indexOf('MB') !== -1) usedGB += parseFloat(s) / 1024;
+      else if (s.indexOf('KB') !== -1) usedGB += parseFloat(s) / (1024 * 1024);
+    });
+    var pct = Math.min(100, Math.max(0, Math.round((usedGB / 500) * 100)));
+    var fill = section.querySelector('.storage-bar .fill');
+    if (fill) fill.style.width = pct + '%';
+    var headerFlex = section.querySelector('.widget .flex');
+    if (headerFlex) {
+      var storageLabel = headerFlex.nextElementSibling;
+      if (storageLabel && storageLabel.tagName === 'SPAN') {
+        storageLabel.textContent = usedGB.toFixed(1) + ' GB / 500 GB';
+      }
+      var pEl = section.querySelector('.widget > p');
+      if (pEl) {
+        pEl.textContent = pct + '% used \u2014 ' + Math.round(500 - usedGB) + ' GB remaining';
+      }
+    }
+  }
+
+  var uploadBtn = document.querySelector('#page-cloud-center .btn-primary');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var data = getUserData(u);
+      var icons = ['\ud83d\udcc4', '\ud83d\uddbc', '\ud83d\udcc1', '\ud83c\udfb5', '\ud83c\udfa5'];
+      var exts = ['.pdf', '.png', '.zip', '.mp3', '.mp4'];
+      var names = ['new-document', 'screenshot', 'archive', 'audio-clip', 'video-clip'];
+      var sizes = ['1.2 MB', '3.5 MB', '256 MB', '512 MB', '45 MB'];
+      var idx = Math.floor(Math.random() * icons.length);
+      data.cloudFiles.push({
+        name: names[idx] + '-' + Date.now() + exts[idx],
+        size: sizes[idx],
+        icon: icons[idx],
+        modified: 'Just now',
+      });
+      saveUserData(u, data);
+      renderCloudFiles(u);
+    });
+  }
+
+  var currentMediaIndex = 0;
+  var isPlayingMedia = false;
+
+  function renderMedia(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var items = data.mediaItems || [];
+    var section = document.getElementById('page-media-center');
+    if (!section) return;
+    var grids = section.querySelectorAll('.media-grid');
+    if (grids.length < 3) return;
+
+    var images = items.filter(function(m) { return m.type === 'image'; });
+    var videos = items.filter(function(m) { return m.type === 'video'; });
+    var musics = items.filter(function(m) { return m.type === 'music'; });
+
+    function fillGrid(grid, list) {
+      grid.innerHTML = '';
+      if (list.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:20px">No items.</p>';
+        return;
+      }
+      list.forEach(function(item) {
+        var div = document.createElement('div');
+        div.className = 'media-item';
+        div.innerHTML = item.icon + '<span>' + item.title + '</span>';
+        div.addEventListener('click', function() {
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].title === item.title && items[i].type === item.type) {
+              currentMediaIndex = i;
+              break;
+            }
+          }
+          updateNowPlaying(items, currentMediaIndex);
+        });
+        grid.appendChild(div);
+      });
+    }
+
+    fillGrid(grids[0], images);
+    fillGrid(grids[1], videos);
+    fillGrid(grids[2], musics);
+  }
+
+  function updateNowPlaying(items, idx) {
+    var item = items[idx];
+    var span = document.querySelector('#page-media-center .player-controls span');
+    if (span) {
+      span.textContent = item.icon + ' ' + item.title;
+    }
+    isPlayingMedia = true;
+    var playBtn = document.querySelector('#page-media-center .player-controls button:nth-child(2)');
+    if (playBtn) playBtn.textContent = '\u23f8';
+  }
+
+  var playerBtns = document.querySelectorAll('#page-media-center .player-controls button');
+  if (playerBtns.length >= 3) {
+    playerBtns[0].addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var data = getUserData(u);
+      var items = data.mediaItems || [];
+      if (items.length === 0) return;
+      currentMediaIndex = (currentMediaIndex - 1 + items.length) % items.length;
+      updateNowPlaying(items, currentMediaIndex);
+    });
+    playerBtns[1].addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var data = getUserData(u);
+      var items = data.mediaItems || [];
+      if (items.length === 0) return;
+      if (isPlayingMedia) {
+        isPlayingMedia = false;
+        playerBtns[1].textContent = '\u25b6';
+      } else {
+        isPlayingMedia = true;
+        playerBtns[1].textContent = '\u23f8';
+        if (currentMediaIndex < items.length) {
+          updateNowPlaying(items, currentMediaIndex);
+        }
+      }
+    });
+    playerBtns[2].addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var data = getUserData(u);
+      var items = data.mediaItems || [];
+      if (items.length === 0) return;
+      currentMediaIndex = (currentMediaIndex + 1) % items.length;
+      updateNowPlaying(items, currentMediaIndex);
+    });
+  }
+
+  function renderBrowser(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var bookmarks = data.bookmarks || [];
+    var bmContainer = document.querySelector('#page-browser .bookmarks');
+    if (bmContainer) {
+      bmContainer.innerHTML = '';
+      bookmarks.forEach(function(bm) {
+        var a = document.createElement('a');
+        a.href = '#';
+        a.textContent = bm.name;
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          var urlInput = document.querySelector('#page-browser .url-bar input');
+          if (urlInput) urlInput.value = bm.url;
+          var content = document.querySelector('#page-browser .browser-content');
+          if (content) {
+            content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><h2 style="color:var(--accent);font-size:2rem;margin-bottom:12px">' + bm.name + '</h2><p style="font-size:1.1rem">' + bm.url + '</p><p style="margin-top:20px">Loading content...</p></div>';
+          }
+        });
+        bmContainer.appendChild(a);
+      });
+    }
+  }
+
+  var browserUrlInput = document.querySelector('#page-browser .url-bar input');
+  if (browserUrlInput) {
+    browserUrlInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        var url = this.value.trim();
+        var content = document.querySelector('#page-browser .browser-content');
+        if (content) {
+          content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><h2 style="color:var(--accent);font-size:1.5rem;margin-bottom:12px">Navigated to</h2><p style="font-size:1.1rem">' + url + '</p><p style="margin-top:20px;font-size:0.85rem">This is a simulated browser view.</p></div>';
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll('#page-browser .browser-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var tabs = document.querySelectorAll('#page-browser .browser-tab');
+      if (this.textContent.trim() === '\u2795') {
+        var u = localStorage.getItem('huntrix_user');
+        if (u) {
+          var data = getUserData(u);
+          data.browserTabs.push('\ud83d\udcc4 Tab ' + (data.browserTabs.length + 1));
+          data.activeTab = data.browserTabs.length - 1;
+          saveUserData(u, data);
+        }
+        return;
+      }
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      this.classList.add('active');
+      var content = document.querySelector('#page-browser .browser-content');
+      if (content) {
+        content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><p style="font-size:1.2rem">' + this.textContent.trim() + '</p><p>Tab content would appear here.</p></div>';
+      }
+    });
+  });
+
+  var browserNavBtns = document.querySelectorAll('#page-browser .browser-nav button');
+  if (browserNavBtns.length >= 3) {
+    browserNavBtns[2].addEventListener('click', function() {
+      var content = document.querySelector('#page-browser .browser-content');
+      if (content) {
+        content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><p style="font-size:1.2rem">Refreshing...</p></div>';
+      }
+    });
+  }
+
+  function renderNotes(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var notes = data.notes || [];
+    var notesSection = document.querySelector('#page-productivity .two-col > div:first-child');
+    if (!notesSection) return;
+    var existing = document.getElementById('notes-list');
+    if (existing) existing.remove();
+    if (notes.length) {
+      var list = document.createElement('div');
+      list.id = 'notes-list';
+      list.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto';
+      notes.slice().reverse().forEach(function(note) {
+        var div = document.createElement('div');
+        div.style.cssText = 'padding:10px 12px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-size:0.85rem';
+        div.textContent = note;
+        list.appendChild(div);
+      });
+      notesSection.appendChild(list);
+    }
+  }
+
+  var saveNoteBtn = document.querySelector('#page-productivity .two-col > div:first-child .btn-primary');
+  if (saveNoteBtn) {
+    saveNoteBtn.addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var textarea = document.querySelector('#page-productivity .two-col > div:first-child textarea');
+      if (!textarea) return;
+      var text = textarea.value.trim();
+      if (!text) { alert('Please write something first.'); return; }
+      var data = getUserData(u);
+      data.notes.push(text);
+      saveUserData(u, data);
+      textarea.value = '';
+      renderNotes(u);
+    });
+  }
+
+  function renderTasks(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var tasks = data.tasks || [];
+    var todoList = document.querySelector('#page-productivity .todo-list');
+    if (!todoList) return;
+
+    todoList.innerHTML = '';
+    if (tasks.length === 0) {
+      todoList.innerHTML = '<p style="color:var(--text-muted);padding:10px">No tasks yet.</p>';
+    } else {
+      tasks.forEach(function(task, idx) {
+        var item = document.createElement('div');
+        item.className = 'todo-item';
+        var doneCls = task.done ? 'done' : '';
+        var chk = task.done ? 'checked' : '';
+        item.innerHTML = '<input type="checkbox" ' + chk + ' data-task-idx="' + idx + '"><span class="todo-text ' + doneCls + '">' + task.text + '</span><span class="todo-tag">' + (task.tag || 'General') + '</span>';
+        todoList.appendChild(item);
+      });
+    }
+
+    var active = tasks.filter(function(t) { return !t.done; }).length;
+    var done = tasks.filter(function(t) { return t.done; }).length;
+    var countEl = document.getElementById('task-count');
+    if (!countEl) {
+      countEl = document.createElement('p');
+      countEl.id = 'task-count';
+      countEl.style.cssText = 'font-size:0.8rem;color:var(--text-muted);margin-top:8px';
+      if (todoList.parentNode) todoList.parentNode.appendChild(countEl);
+    }
+    countEl.textContent = active + ' active \u00b7 ' + done + ' completed';
+
+    todoList.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var idx = parseInt(this.getAttribute('data-task-idx'));
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        if (d.tasks && d.tasks[idx]) {
+          d.tasks[idx].done = this.checked;
+          saveUserData(u, d);
+          renderTasks(u);
+        }
+      });
+    });
+  }
+
+  var taskInput = document.querySelector('#page-productivity .todo-list + .flex input');
+  if (taskInput) {
+    var taskAddBtn = taskInput.nextElementSibling;
+    if (taskAddBtn && taskAddBtn.tagName === 'BUTTON') {
+      taskAddBtn.addEventListener('click', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var text = taskInput.value.trim();
+        if (!text) { alert('Please enter a task.'); return; }
+        var data = getUserData(u);
+        data.tasks.push({ text: text, tag: 'General', done: false });
+        saveUserData(u, data);
+        taskInput.value = '';
+        renderTasks(u);
+      });
+      taskInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') taskAddBtn.click();
+      });
+    }
+  }
+
+  function renderAnalytics(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var nums = document.querySelectorAll('#page-analytics .analytics-stat .num');
+    if (nums.length >= 4) {
+      nums[0].textContent = Math.floor(Math.random() * 200 + 750);
+      nums[1].textContent = (99 + Math.random() * 0.8).toFixed(1);
+      var installed = (data.packages || []).filter(function(p) { return p.installed; }).length;
+      nums[2].textContent = installed + (data.repos ? data.repos.length : 0);
+      nums[3].textContent = (1 + Math.random() * 3).toFixed(1);
+    }
+  }
+
+  var exportBtn = document.querySelector('#page-analytics .btn-primary');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function() {
+      var u = localStorage.getItem('huntrix_user');
+      if (!u) return;
+      var data = getUserData(u);
+      if (!data) return;
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'huntrix-' + u + '-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  function loadSettings(username) {
+    var data = getUserData(username);
+    if (!data) return;
+    var s = data.settings || {};
+    var nameInput = document.querySelector('#page-settings input[type="text"]');
+    var emailInput = document.querySelector('#page-settings input[type="email"]');
+    if (nameInput) nameInput.value = s.displayName || '';
+    if (emailInput) emailInput.value = s.email || '';
+
+    var dmToggle = document.getElementById('dark-mode-toggle');
+    if (dmToggle) {
+      var isDark = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#0a0a1a';
+      if (s.darkMode && !isDark) { document.getElementById('theme-toggle').click(); }
+      else if (!s.darkMode && isDark) { document.getElementById('theme-toggle').click(); }
+      if (s.darkMode) dmToggle.classList.add('on'); else dmToggle.classList.remove('on');
+    }
+
+    if (s.accentColor) {
+      var cps = document.querySelectorAll('.color-picker .cp');
+      cps.forEach(function(cp) {
+        cp.classList.remove('active');
+        if (cp.getAttribute('data-color') === s.accentColor) {
+          cp.classList.add('active');
+          document.documentElement.style.setProperty('--accent', s.accentColor);
+        }
+      });
+    }
+
+    var notifSwitches = [];
+    document.querySelectorAll('#page-settings .settings-section .toggle-switch').forEach(function(t) {
+      if (t.id !== 'dark-mode-toggle') notifSwitches.push(t);
+    });
+    if (notifSwitches.length >= 3) {
+      notifSwitches[0].classList.toggle('on', !!s.notifSystem);
+      notifSwitches[1].classList.toggle('on', !!s.notifUpdates);
+      notifSwitches[2].classList.toggle('on', !!s.notifAI);
+    }
+  }
+
+  setTimeout(function() {
+    var nameInput = document.querySelector('#page-settings input[type="text"]');
+    var emailInput = document.querySelector('#page-settings input[type="email"]');
+    if (nameInput) {
+      nameInput.addEventListener('change', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        if (!d.settings) d.settings = {};
+        d.settings.displayName = this.value;
+        saveUserData(u, d);
+      });
+    }
+    if (emailInput) {
+      emailInput.addEventListener('change', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        if (!d.settings) d.settings = {};
+        d.settings.email = this.value;
+        saveUserData(u, d);
+      });
+    }
+    var notifSwitches = [];
+    document.querySelectorAll('#page-settings .settings-section .toggle-switch').forEach(function(t) {
+      if (t.id !== 'dark-mode-toggle') notifSwitches.push(t);
+    });
+    var notifKeys = ['notifSystem', 'notifUpdates', 'notifAI'];
+    notifSwitches.forEach(function(t, i) {
+      t.addEventListener('click', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u || i >= notifKeys.length) return;
+        var d = getUserData(u);
+        if (!d.settings) d.settings = {};
+        d.settings[notifKeys[i]] = this.classList.contains('on');
+        saveUserData(u, d);
+      });
+    });
+    var dmToggle = document.getElementById('dark-mode-toggle');
+    if (dmToggle) {
+      dmToggle.addEventListener('click', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        if (!d.settings) d.settings = {};
+        d.settings.darkMode = this.classList.contains('on');
+        saveUserData(u, d);
+      });
+    }
+    document.querySelectorAll('.color-picker .cp').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var u = localStorage.getItem('huntrix_user');
+        if (!u) return;
+        var d = getUserData(u);
+        if (!d.settings) d.settings = {};
+        d.settings.accentColor = this.getAttribute('data-color');
+        saveUserData(u, d);
+      });
+    });
+  }, 200);
+
+  if (stored) {
+    setTimeout(function() { renderAllSections(stored); }, 100);
+  }
+})();
+</script>
+
 </body>
 </html>
