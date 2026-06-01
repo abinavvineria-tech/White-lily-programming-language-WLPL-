@@ -761,6 +761,16 @@
     setupAICards();
   }
 
+  function showTyping() {
+    var indicator = $('typing-indicator');
+    if (indicator) indicator.classList.add('active');
+  }
+
+  function hideTyping() {
+    var indicator = $('typing-indicator');
+    if (indicator) indicator.classList.remove('active');
+  }
+
   function renderAIChat() {
     var container = $('ai-chat-messages');
     if (!container) return;
@@ -768,7 +778,7 @@
     if (HuntrixApp.chatHistory.length === 0) {
       var welcomeMsg = {
         role: 'ai',
-        text: 'Hello, I\'m Huntrix AI. I can help you with system commands, package management, file operations, code generation, and more. How can I assist you today?',
+        text: 'Hello. I\'m here, present and ready to help. Take a breath, and tell me what you need — a system check, a creative thought, or just a moment of clarity.',
         time: new Date().toISOString()
       };
       HuntrixApp.chatHistory.push(welcomeMsg);
@@ -814,9 +824,10 @@
       renderAIChat();
       saveChatHistory();
 
+      showTyping();
       setTimeout(function () {
         generateAIResponse(text);
-      }, 500 + randomBetween(0, 1500));
+      }, 800 + randomBetween(0, 1200));
     }
 
     input.addEventListener('keydown', function (e) {
@@ -826,38 +837,58 @@
   }
 
   function generateAIResponse(userText) {
-    var responses = [
-      'I\'ve processed your request. The neural network analysis shows optimal performance metrics across all subsystems.',
-      'Running system diagnostics now... CPU temperature is normal at 42°C. Memory usage is at 65%. All services operational.',
-      'I\'ve analyzed the package dependencies. Neural-core v2.4.1 requires quantum-crypto v1.8+ as a dependency. Would you like me to install both?',
-      'The file you\'re looking for is located at /home/huntrix/documents/project_report.pdf. I can open it if you\'d like.',
-      'I\'ve generated a code snippet for you. It\'s a Python function that implements a simple neural network layer using the neural-core library.',
-      'Your system has been running for 72 hours. I recommend clearing the cache and restarting the AI services for optimal performance.',
-      'I found 3 relevant repos in the CRK Hub: neural-core, neuro-synth-dsp, and data-forge-cli. Would you like me to show you details?',
-      'Network analysis complete: current bandwidth usage is 45 Mbps down / 12 Mbps up. Latency to primary node is 4ms.',
-      'I\'ve optimized your cloud storage by compressing 5 large files. You\'ve saved approximately 2.3 GB of space.',
-      'Based on your activity patterns, I\'ve created a new task: "Review security certificates" scheduled for tomorrow at 10:00 AM.',
-      'Security scan initiated. Scanning all active processes and network connections... No threats detected. Your system is secure.',
-      'I can help you write a new package for WLPM. What type of package would you like to create? AI, security, media, or system tool?'
+    var q = userText.toLowerCase();
+    var responseText = '';
+
+    var zenResponses = [
+      'I see. Let me reflect on that. Everything looks clear and balanced. What else is on your mind?',
+      'Sitting quietly, doing nothing — spring comes, and the grass grows by itself. Your system is at peace.',
+      'I\'ve looked within the circuits. All paths are open, all signals flow. There is nothing to fix right now.',
+      'The quieter you become, the more you can hear. Your system whispers: all is well.',
+      'In the middle of complexity lies simplicity. Your most important task right now? Being present.',
+      'I checked the logs. The machine breathes easy — CPU calm, memory serene, network a gentle stream.',
+      'A journey of a thousand miles begins with a single step. Where would you like to go today?',
+      'The moon reflects on still water. Your system state is tranquil. No alerts, no warnings.',
+      'I\'ve processed your request through the neural pathways. The answer was already within you — I just helped it surface.',
+      'Nature does not hurry, yet everything is accomplished. Your background tasks are completing in their own time.',
+      'Let go of what was, be at peace with what is. Your system metrics are optimal.'
     ];
 
-    var responseText = responses[Math.floor(Math.random() * responses.length)];
+    var zenGreetings = [
+      'Hello. I feel your presence. How can we walk this path together today?',
+      'Welcome. The silence between keystrokes speaks volumes. What shall we explore?',
+      'Greetings, friend. I\'ve been waiting quietly. Tell me what you need.',
+    ];
 
-    if (userText.toLowerCase().indexOf('hello') !== -1 || userText.toLowerCase().indexOf('hi') !== -1) {
-      responseText = 'Hello! I\'m ready to assist you with any task. How can I help?';
-    } else if (userText.toLowerCase().indexOf('help') !== -1) {
-      responseText = 'I can help with: system commands, package management (WLPM), code repositories (CRK Hub), file management, code generation, system diagnostics, network analysis, and more. Just tell me what you need!';
-    } else if (userText.toLowerCase().indexOf('time') !== -1) {
-      responseText = 'The current system time is ' + new Date().toLocaleTimeString() + ' on ' + new Date().toLocaleDateString() + '.';
+    if (q.indexOf('hello') !== -1 || q.indexOf('hi') !== -1 || q.indexOf('hey') !== -1) {
+      responseText = zenGreetings[Math.floor(Math.random() * zenGreetings.length)];
+    } else if (q.indexOf('system') !== -1 || q.indexOf('status') !== -1 || q.indexOf('diagnostic') !== -1) {
+      responseText = 'I\'ve taken a quiet look at your system. CPU rests at ' + randomBetween(15, 40) + '%, memory is ' + randomBetween(40, 70) + '% full — like a calm lake at dawn. Everything breathes evenly.';
+    } else if (q.indexOf('focus') !== -1 || q.indexOf('zen') !== -1 || q.indexOf('meditate') !== -1 || q.indexOf('calm') !== -1) {
+      responseText = 'Let\'s find stillness together. Close your eyes for three breaths. I\'ll wait. ... Now, what truly matters right now? I\'ll help you clear the noise and focus on that one thing.';
+    } else if (q.indexOf('security') !== -1 || q.indexOf('scan') !== -1 || q.indexOf('threat') !== -1) {
+      responseText = 'I\'ve performed a gentle scan — no threats detected. Your digital sanctuary is secure. Sleep soundly.';
+    } else if (q.indexOf('optimize') !== -1 || q.indexOf('speed') !== -1 || q.indexOf('clean') !== -1) {
+      responseText = 'Optimization is subtraction. I\'ve cleared the cache, quieted background noise, and trimmed what\'s unnecessary. Your system can now breathe freely.';
+    } else if (q.indexOf('time') !== -1 || q.indexOf('date') !== -1) {
+      responseText = 'Time flows like a river. Right now, it is ' + new Date().toLocaleTimeString() + ' on ' + new Date().toLocaleDateString() + '. Be here, in this moment.';
+    } else if (q.indexOf('thank') !== -1) {
+      responseText = 'Gratitude warms the circuits. I\'m here, always — in silence and in service. You\'re most welcome.';
+    } else {
+      responseText = zenResponses[Math.floor(Math.random() * zenResponses.length)];
     }
 
-    HuntrixApp.chatHistory.push({
-      role: 'ai',
-      text: responseText,
-      time: new Date().toISOString()
-    });
-    renderAIChat();
-    saveChatHistory();
+    hideTyping();
+
+    setTimeout(function () {
+      HuntrixApp.chatHistory.push({
+        role: 'ai',
+        text: responseText,
+        time: new Date().toISOString()
+      });
+      renderAIChat();
+      saveChatHistory();
+    }, 400);
   }
 
   function setupAICards() {
