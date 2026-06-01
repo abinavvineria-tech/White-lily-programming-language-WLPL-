@@ -9,3 +9,4 @@ node_modules/
 test
 *.egg-info/
 build/
+opencode.json
