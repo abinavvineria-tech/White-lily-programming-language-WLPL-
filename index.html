@@ -200,9 +200,11 @@
     .crk-cookie .cookie-rarity { font-size:0.7rem;margin-top:4px;padding:2px 10px;border-radius:10px;display:inline-block }
     .crk-cookie .rarity-Ancient { color:#ffd700;background:rgba(255,215,0,0.12) }
     .crk-cookie .rarity-Legendary { color:#ff6bff;background:rgba(255,107,255,0.12) }
+    .crk-cookie .rarity-Dragon { color:#ff4444;background:rgba(255,68,68,0.12) }
     .crk-cookie .rarity-Super-Epic { color:#ff884d;background:rgba(255,136,77,0.12) }
     .crk-cookie .rarity-Epic { color:#a855f7;background:rgba(168,85,247,0.12) }
     .crk-cookie .rarity-Rare { color:#60a5fa;background:rgba(96,165,250,0.12) }
+    .crk-cookie .rarity-Common { color:#94a3b8;background:rgba(148,163,184,0.12) }
     .crk-cookie .check-mark { position:absolute;top:6px;right:8px;font-size:1rem;opacity:0;transition:opacity 0.2s }
     .crk-cookie.obtained .check-mark { opacity:1 }
     .crk-cookie .rm-btn { position:absolute;top:6px;left:6px;font-size:0.7rem;background:rgba(255,0,0,0.2);border:none;color:#ff4444;border-radius:50%;width:18px;height:18px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1 }
@@ -526,9 +528,11 @@
             <button class="active" data-filter="all">All</button>
             <button data-filter="Ancient">👑 Ancient</button>
             <button data-filter="Legendary">✨ Legendary</button>
+            <button data-filter="Dragon">🐉 Dragon</button>
             <button data-filter="Super Epic">💫 Super Epic</button>
             <button data-filter="Epic">⭐ Epic</button>
             <button data-filter="Rare">🔹 Rare</button>
+            <button data-filter="Common">📦 Common</button>
           </div>
 
           <input type="text" id="crk-search" placeholder="🔍 Search cookies..." style="margin-bottom:12px">
@@ -538,9 +542,11 @@
             <select id="crk-new-rarity">
               <option value="Ancient">👑 Ancient</option>
               <option value="Legendary">✨ Legendary</option>
+              <option value="Dragon">🐉 Dragon</option>
               <option value="Super Epic">💫 Super Epic</option>
               <option value="Epic" selected>⭐ Epic</option>
               <option value="Rare">🔹 Rare</option>
+              <option value="Common">📦 Common</option>
             </select>
             <button class="btn-primary" id="crk-add-btn">Add</button>
           </div>
@@ -1218,18 +1224,25 @@
     { name: 'Gumball Cookie', rarity: 'Rare' },
     { name: 'Chili Pepper Cookie', rarity: 'Rare' },
     { name: 'Fig Cookie', rarity: 'Rare' },
-    { name: 'Carrot Cookie', rarity: 'Rare' },
-    { name: 'Custard Cookie III', rarity: 'Rare' },
     { name: 'Avocado Cookie', rarity: 'Rare' },
     { name: 'Clover Cookie', rarity: 'Rare' },
-    { name: 'Ninja Cookie', rarity: 'Rare' },
-    { name: 'Knight Cookie', rarity: 'Rare' },
-    { name: 'Princess Cookie', rarity: 'Rare' },
-    { name: 'Muscle Cookie', rarity: 'Rare' },
-    { name: 'Beet Cookie', rarity: 'Rare' },
-    { name: 'Onion Cookie', rarity: 'Rare' },
     { name: 'Rockstar Cookie', rarity: 'Rare' },
     { name: 'Snow Sugar Cookie', rarity: 'Rare' },
+    { name: 'Pitaya Dragon Cookie', rarity: 'Dragon' },
+    { name: 'GingerBrave', rarity: 'Common' },
+    { name: 'Strawberry Cookie', rarity: 'Common' },
+    { name: 'Angel Cookie', rarity: 'Common' },
+    { name: 'Devil Cookie', rarity: 'Common' },
+    { name: 'Beet Cookie', rarity: 'Common' },
+    { name: 'Cherry Cookie', rarity: 'Common' },
+    { name: 'Custard Cookie III', rarity: 'Common' },
+    { name: 'Ninja Cookie', rarity: 'Common' },
+    { name: 'Princess Cookie', rarity: 'Common' },
+    { name: 'Knight Cookie', rarity: 'Common' },
+    { name: 'Muscle Cookie', rarity: 'Common' },
+    { name: 'Onion Cookie', rarity: 'Common' },
+    { name: 'Carrot Cookie', rarity: 'Common' },
+    { name: 'Alchemist Cookie', rarity: 'Common' },
   ];
 
   function getCRKData(username) {
@@ -1272,7 +1285,7 @@
     filtered.forEach(function(c) {
       var div = document.createElement('div');
       div.className = 'crk-cookie' + (owned.indexOf(c.name) !== -1 ? ' obtained' : '');
-      var icons = { 'Ancient': '👑', 'Legendary': '✨', 'Super Epic': '💫', 'Epic': '⭐', 'Rare': '🔹' };
+      var icons = { 'Ancient': '👑', 'Legendary': '✨', 'Dragon': '🐉', 'Super Epic': '💫', 'Epic': '⭐', 'Rare': '🔹', 'Common': '📦' };
       var isCustom = c.isCustom;
       div.innerHTML = '<span class="cookie-icon">' + (icons[c.rarity] || '🍪') + '</span>'
         + '<div class="cookie-name">' + c.name + '</div>'
